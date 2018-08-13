@@ -1,0 +1,6 @@
+/target
+**/*.rs.bk
+Cargo.lock
+
+/p64lang_cli/target
+/p64lang/Cargo.lock

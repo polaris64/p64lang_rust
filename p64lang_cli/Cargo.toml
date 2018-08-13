@@ -1,0 +1,7 @@
+[package]
+name = "p64lang_cli"
+version = "0.1.0"
+authors = ["Simon Pugnet <simon@polaris64.net>"]
+
+[dependencies]
+p64lang = { path = "../" }
