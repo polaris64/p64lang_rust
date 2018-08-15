@@ -1,11 +1,12 @@
 use std::collections::HashMap;
+use std::rc::Rc;
 
 use runtime::{DefaultScriptInterface, ScriptInterface};
 
 // Language scope struct
 #[derive(Debug)]
 pub struct Scope {
-    pub funcs: HashMap<String, Function>,
+    pub funcs: HashMap<String, Rc<Function>>,
     pub vars: HashMap<String, Value>,
 }
 impl Scope {
@@ -50,7 +51,7 @@ impl ScopeChain {
 
     pub fn insert_func(&mut self, key: &str, val: Function) {
         match self.scopes.last_mut() {
-            Some(ref mut scope) => scope.funcs.insert(key.clone().to_string(), val),
+            Some(ref mut scope) => scope.funcs.insert(key.clone().to_string(), Rc::new(val)),
             _ => None,
         };
     }
@@ -62,10 +63,10 @@ impl ScopeChain {
         };
     }
 
-    pub fn resolve_func(&self, key: &str) -> Option<&Function> {
+    pub fn resolve_func(&self, key: &str) -> Option<Rc<Function>> {
         for scope in self.scopes.iter().rev() {
             match scope.funcs.get(key) {
-                Some(x) => return Some(x),
+                Some(x) => return Some(Rc::clone(x)),
                 _ => {}
             }
         }
@@ -285,7 +286,7 @@ pub enum ExecResult {
     Return(Value),
 }
 
-#[derive(Clone, Debug)]
+#[derive(Debug)]
 pub struct Function {
     args: Vec<Ident>,
     stmts: StmtBlock,
@@ -367,18 +368,7 @@ impl Evaluatable for Expr {
                     .map(|x| x.eval(scopes, iface))
                     .collect::<Vec<Value>>();
 
-                // Create clone of Function as resolving it from ScopeChain returns a reference
-                // (and therefore immutably borrows "scopes"), then calling Function::execute()
-                // requires a mutable borrow to "scopes" which is not allowed
-                // TODO: find solution without clone
-                let mut func: Option<Function>;
-                {
-                    func = match scopes.resolve_func(func_id) {
-                        Some(f) => Some(f.clone()),
-                        None => None,
-                    };
-                }
-                match func {
+                match scopes.resolve_func(func_id) {
                     Some(f) => f.execute(scopes, &eval_args, iface),
                     None => Value::None,
                 }

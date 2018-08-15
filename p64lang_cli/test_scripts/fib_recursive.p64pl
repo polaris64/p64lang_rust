@@ -10,5 +10,5 @@ loop {
   print ") = ";
   println fib(counter);
   let counter = counter + 1;
-  if counter > 25 { break; };
+  if counter > 28 { break; };
 }

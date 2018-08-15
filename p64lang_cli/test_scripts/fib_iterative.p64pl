@@ -1,0 +1,24 @@
+fn fib(n) {
+  if n < 1 { return 0; };
+  let res = 0;
+  let prev = 1;
+  let i = n;
+  loop {
+    let temp = res;
+    let res = res + prev;
+    let prev = temp;
+    let i = i - 1;
+    if i == 0 { break; };
+  };
+  return res;
+};
+
+let counter = 0;
+loop {
+  print "fib(";
+  print counter;
+  print ") = ";
+  println fib(counter);
+  let counter = counter + 1;
+  if counter > 28 { break; };
+}
