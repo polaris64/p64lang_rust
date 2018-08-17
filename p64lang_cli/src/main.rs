@@ -4,7 +4,7 @@ use std::io::{self, Read};
 
 use p64lang::ast::Scope;
 use p64lang::interpret;
-use p64lang::runtime::DefaultScriptInterface;
+use p64lang::runtime::insert_native_functions;
 
 fn main() {
     let mut buffer = String::new();
@@ -12,7 +12,8 @@ fn main() {
         .read_to_string(&mut buffer)
         .expect("Unable to read input");
 
-    let scope = Scope::new();
-    let res = interpret(&buffer, scope, &mut DefaultScriptInterface::new());
-    println!("Result: {:?}", res);
+    let mut scope = Scope::new();
+    insert_native_functions(&mut scope);
+    let res = interpret(&buffer, scope);
+    println!("Result: {:?}", res.exec_result);
 }

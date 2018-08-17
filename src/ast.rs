@@ -1,18 +1,18 @@
+use std::any::Any;
 use std::collections::HashMap;
 use std::rc::Rc;
 
-use runtime::{DefaultScriptInterface, ScriptInterface};
-
 // Language scope struct
-#[derive(Debug)]
 pub struct Scope {
     pub funcs: HashMap<String, Rc<Function>>,
+    pub native_funcs: HashMap<String, Rc<NativeFunction>>,
     pub vars: HashMap<String, Value>,
 }
 impl Scope {
     pub fn new() -> Scope {
         Scope {
             funcs: HashMap::new(),
+            native_funcs: HashMap::new(),
             vars: HashMap::new(),
         }
     }
@@ -73,6 +73,16 @@ impl ScopeChain {
         None
     }
 
+    pub fn resolve_native_func(&self, key: &str) -> Option<Rc<NativeFunction>> {
+        for scope in self.scopes.iter().rev() {
+            match scope.native_funcs.get(key) {
+                Some(x) => return Some(Rc::clone(x)),
+                _ => {}
+            };
+        }
+        None
+    }
+
     pub fn resolve_var(&self, key: &str) -> Option<&Value> {
         for scope in self.scopes.iter().rev() {
             match scope.vars.get(key) {
@@ -91,13 +101,13 @@ pub type StmtBlock = Vec<Box<Stmt>>;
 #[derive(Clone, Debug, PartialEq)]
 pub enum Stmt {
     Let(Ident, Box<Expr>),
-    Print(Box<Expr>, bool),
     FnDef(Ident, Vec<Ident>, StmtBlock),
     Return(Box<Expr>),
     If(Box<Expr>, StmtBlock),
     IfElse(Box<Expr>, StmtBlock, StmtBlock),
     Break,
     Loop(StmtBlock),
+    Expr(Box<Expr>),
 }
 
 // Language expression: numbers/identifiers and operations thereon
@@ -292,12 +302,7 @@ pub struct Function {
     stmts: StmtBlock,
 }
 impl Function {
-    pub fn execute<I: ScriptInterface>(
-        &self,
-        scopes: &mut ScopeChain,
-        args: &Vec<Value>,
-        iface: &mut I,
-    ) -> Value {
+    pub fn execute(&self, scopes: &mut ScopeChain, args: &Vec<Value>) -> Value {
         // Create local scope
         let scope = Scope::from_args(
             &self
@@ -311,7 +316,7 @@ impl Function {
         scopes.push(scope);
 
         // Evaluate Function StmtBlock
-        let res = match self.stmts.exec(scopes, iface) {
+        let res = match self.stmts.exec(scopes) {
             ExecResult::Return(x) => x,
             _ => Value::None,
         };
@@ -323,54 +328,44 @@ impl Function {
     }
 }
 
+pub trait NativeFunction {
+    fn execute(&self, scopes: &mut ScopeChain, args: &Vec<Value>) -> Value;
+    fn as_any(&self) -> &Any;
+}
+
 // Trait allowing various language elements to be evaluated
 pub trait Evaluatable {
-    fn eval_default(&self, scopes: &mut ScopeChain) -> Value;
-    fn eval<I>(&self, scopes: &mut ScopeChain, &mut I) -> Value
-    where
-        I: ScriptInterface;
+    fn eval(&self, scopes: &mut ScopeChain) -> Value;
 }
 
 // Trait allowing statements to be executed
 pub trait Executable {
-    fn exec_default(&self, scopes: &mut ScopeChain) -> ExecResult;
-    fn exec<I>(&self, scopes: &mut ScopeChain, iface: &mut I) -> ExecResult
-    where
-        I: ScriptInterface;
+    fn exec(&self, scopes: &mut ScopeChain) -> ExecResult;
 }
 
 // Evaluate Expr
 impl Evaluatable for Expr {
-    fn eval_default(&self, scopes: &mut ScopeChain) -> Value {
-        self.eval(scopes, &mut DefaultScriptInterface::new())
-    }
-
-    fn eval<I>(&self, scopes: &mut ScopeChain, iface: &mut I) -> Value
-    where
-        I: ScriptInterface,
-    {
+    fn eval(&self, scopes: &mut ScopeChain) -> Value {
         match *self {
             Expr::Int(x) => Value::Int(x),
             Expr::Real(x) => Value::Real(x),
             Expr::Str(ref x) => Value::Str(x.to_string()),
             Expr::Bool(x) => Value::Bool(x),
-            Expr::BinOp(ref l, ref opc, ref r) => {
-                opc.eval(l.eval(scopes, iface), r.eval(scopes, iface))
-            }
-            Expr::UnaryOp(ref opc, ref x) => opc.eval_unary(x.eval(scopes, iface)),
+            Expr::BinOp(ref l, ref opc, ref r) => opc.eval(l.eval(scopes), r.eval(scopes)),
+            Expr::UnaryOp(ref opc, ref x) => opc.eval_unary(x.eval(scopes)),
             Expr::Id(ref x) => match scopes.resolve_var(x) {
                 Some(x) => x.clone(),
                 None => Value::None,
             },
             Expr::FuncCall(ref func_id, ref args) => {
-                let eval_args = args
-                    .iter()
-                    .map(|x| x.eval(scopes, iface))
-                    .collect::<Vec<Value>>();
+                let eval_args = args.iter().map(|x| x.eval(scopes)).collect::<Vec<Value>>();
 
                 match scopes.resolve_func(func_id) {
-                    Some(f) => f.execute(scopes, &eval_args, iface),
-                    None => Value::None,
+                    Some(f) => f.execute(scopes, &eval_args),
+                    None => match scopes.resolve_native_func(func_id) {
+                        Some(f) => f.execute(scopes, &eval_args),
+                        None => Value::None,
+                    },
                 }
             }
         }
@@ -379,37 +374,13 @@ impl Evaluatable for Expr {
 
 // Execute Stmt
 impl Executable for Stmt {
-    fn exec_default(&self, scopes: &mut ScopeChain) -> ExecResult {
-        self.exec::<DefaultScriptInterface>(scopes, &mut DefaultScriptInterface::new())
-    }
-
-    fn exec<I>(&self, scopes: &mut ScopeChain, iface: &mut I) -> ExecResult
-    where
-        I: ScriptInterface,
-    {
+    fn exec(&self, scopes: &mut ScopeChain) -> ExecResult {
         match *self {
             // Evaluate "expr" and update variable table (key: "id") with result. Value of the Let
             // is None.
             Stmt::Let(ref id, ref expr) => {
-                let eval_res = expr.eval(scopes, iface);
+                let eval_res = expr.eval(scopes);
                 scopes.insert_var(id, eval_res);
-                ExecResult::None
-            }
-
-            // Evaluate the Expr and print the result
-            Stmt::Print(ref expr, nl) => {
-                let eval_res = expr.eval(scopes, iface);
-                let string = match eval_res {
-                    Value::Int(x) => format!("{}", x),
-                    Value::Real(x) => format!("{}", x),
-                    Value::Str(x) => format!("{}", x),
-                    _ => format!("{:?}", eval_res),
-                };
-                if nl {
-                    iface.println(&string)
-                } else {
-                    iface.print(&string)
-                };
                 ExecResult::None
             }
 
@@ -425,12 +396,12 @@ impl Executable for Stmt {
                 ExecResult::None
             }
 
-            Stmt::Return(ref expr) => ExecResult::Return(expr.eval(scopes, iface)),
+            Stmt::Return(ref expr) => ExecResult::Return(expr.eval(scopes)),
 
             Stmt::If(ref cond, ref stmts) => {
-                if let Value::Bool(b) = cond.eval(scopes, iface) {
+                if let Value::Bool(b) = cond.eval(scopes) {
                     if b {
-                        stmts.exec(scopes, iface)
+                        stmts.exec(scopes)
                     } else {
                         ExecResult::None
                     }
@@ -440,41 +411,39 @@ impl Executable for Stmt {
             }
 
             Stmt::IfElse(ref cond, ref stmts, ref else_stmts) => {
-                if let Value::Bool(b) = cond.eval(scopes, iface) {
+                if let Value::Bool(b) = cond.eval(scopes) {
                     if b {
-                        stmts.exec(scopes, iface)
+                        stmts.exec(scopes)
                     } else {
-                        else_stmts.exec(scopes, iface)
+                        else_stmts.exec(scopes)
                     }
                 } else {
-                    else_stmts.exec(scopes, iface)
+                    else_stmts.exec(scopes)
                 }
             }
 
             Stmt::Break => ExecResult::Break,
 
             Stmt::Loop(ref stmts) => loop {
-                let res = stmts.exec(scopes, iface);
+                let res = stmts.exec(scopes);
                 if let ExecResult::Break = res {
                     return ExecResult::None;
                 }
             },
+
+            Stmt::Expr(ref exp) => {
+                exp.eval(scopes);
+                ExecResult::None
+            }
         }
     }
 }
 
 // Execute StmtBlock: execute all Stmts in turn
 impl Executable for StmtBlock {
-    fn exec_default(&self, scopes: &mut ScopeChain) -> ExecResult {
-        self.exec(scopes, &mut DefaultScriptInterface::new())
-    }
-
-    fn exec<I>(&self, scopes: &mut ScopeChain, iface: &mut I) -> ExecResult
-    where
-        I: ScriptInterface,
-    {
+    fn exec(&self, scopes: &mut ScopeChain) -> ExecResult {
         for stmt in self {
-            let res = stmt.exec(scopes, iface);
+            let res = stmt.exec(scopes);
             if let ExecResult::Return(_) = res {
                 return res;
             }

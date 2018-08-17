@@ -1,22 +1,50 @@
-pub trait ScriptInterface {
-    fn print(&mut self, s: &str);
-    fn println(&mut self, s: &str);
-}
+use std::any::Any;
+use std::rc::Rc;
 
-pub struct DefaultScriptInterface { }
+use ast::{NativeFunction, Scope, ScopeChain, Value};
 
-impl DefaultScriptInterface {
-    pub fn new() -> DefaultScriptInterface {
-        DefaultScriptInterface {}
+pub struct NFPrint;
+pub struct NFPrintLn;
+
+impl NativeFunction for NFPrint {
+    fn execute(&self, _scopes: &mut ScopeChain, args: &Vec<Value>) -> Value {
+        for arg in args {
+            match arg {
+                Value::Int(x) => print!("{}", x),
+                Value::Real(x) => print!("{}", x),
+                Value::Str(x) => print!("{}", x),
+                _ => print!("{:?}", arg),
+            };
+        }
+        Value::None
+    }
+    fn as_any(&self) -> &Any {
+        self
     }
 }
 
-impl ScriptInterface for DefaultScriptInterface {
-    fn print(&mut self, s: &str) {
-        print!("{}", s);
+impl NativeFunction for NFPrintLn {
+    fn execute(&self, _scopes: &mut ScopeChain, args: &Vec<Value>) -> Value {
+        for arg in args {
+            match arg {
+                Value::Int(x) => println!("{}", x),
+                Value::Real(x) => println!("{}", x),
+                Value::Str(x) => println!("{}", x),
+                _ => println!("{:?}", arg),
+            };
+        }
+        Value::None
     }
+    fn as_any(&self) -> &Any {
+        self
+    }
+}
 
-    fn println(&mut self, s: &str) {
-        println!("{}", s);
-    }
+pub fn insert_native_functions(scope: &mut Scope) {
+    scope
+        .native_funcs
+        .insert("print".to_string(), Rc::new(NFPrint {}));
+    scope
+        .native_funcs
+        .insert("println".to_string(), Rc::new(NFPrintLn {}));
 }

@@ -4,45 +4,91 @@ pub mod runtime;
 
 use ast::{ExecResult, Executable, Scope, ScopeChain};
 use p64lang::ProgramParser;
-use runtime::ScriptInterface;
+use runtime::insert_native_functions;
 
-pub fn interpret(src: &str, global_scope: Scope, iface: &mut impl ScriptInterface) -> ExecResult {
-    let mut scopes = ScopeChain::new();
-    scopes.push(global_scope);
-    match ProgramParser::new().parse(src) {
-        Ok(block) => block.exec(&mut scopes, iface),
-        Err(_) => ExecResult::Error("Unable to parse program source"),
+pub struct InterpretResult {
+    pub exec_result: ExecResult,
+    pub scope_chain: ScopeChain,
+}
+
+pub fn get_default_global_scope() -> Scope {
+    let mut scope = Scope::new();
+    insert_native_functions(&mut scope);
+    scope
+}
+
+pub fn interpret(src: &str, global_scope: Scope) -> InterpretResult {
+    let mut scopes = ScopeChain::from_scope(global_scope);
+    InterpretResult {
+        exec_result: match ProgramParser::new().parse(src) {
+            Ok(block) => block.exec(&mut scopes),
+            Err(_) => ExecResult::Error("Unable to parse program source"),
+        },
+        scope_chain: scopes,
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use ast::{Evaluatable, Executable, Scope, ScopeChain, Value};
+    use ast::{Evaluatable, Executable, NativeFunction, Scope, ScopeChain, Value};
     use p64lang::{ExprParser, ProgramParser};
+    use std::any::Any;
+    use std::cell::RefCell;
+    use std::rc::Rc;
 
-    // Mock ScriptInterface for testing
-    struct TestingScriptInterface {
-        print_count: usize,
-        println_count: usize,
+    struct TestPrint {
+        calls: RefCell<usize>,
     }
-    impl TestingScriptInterface {
-        pub fn new() -> TestingScriptInterface {
-            TestingScriptInterface {
-                print_count: 0,
-                println_count: 0,
-            }
+    impl TestPrint {
+        pub fn get_calls(&self) -> usize {
+            self.calls.borrow().clone()
+        }
+        pub fn assert_calls(&self, num: usize) {
+            assert_eq!(num, self.get_calls());
         }
     }
-    impl ScriptInterface for TestingScriptInterface {
-        fn print(&mut self, s: &str) {
-            self.print_count += 1;
-            print!("{}", s);
+    impl NativeFunction for TestPrint {
+        fn execute(&self, _scopes: &mut ScopeChain, _args: &Vec<Value>) -> Value {
+            self.calls.replace(self.get_calls() + 1);
+            Value::None
         }
-        fn println(&mut self, s: &str) {
-            self.println_count += 1;
-            println!("{}", s);
+        fn as_any(&self) -> &Any {
+            self
         }
+    }
+    struct TestPrintLn {
+        calls: RefCell<usize>,
+    }
+    impl TestPrintLn {
+        pub fn get_calls(&self) -> usize {
+            self.calls.borrow().clone()
+        }
+        pub fn assert_calls(&self, num: usize) {
+            assert_eq!(num, self.get_calls());
+        }
+    }
+    impl NativeFunction for TestPrintLn {
+        fn execute(&self, _scopes: &mut ScopeChain, _args: &Vec<Value>) -> Value {
+            self.calls.replace(self.get_calls() + 1);
+            Value::None
+        }
+        fn as_any(&self) -> &Any {
+            self
+        }
+    }
+
+    fn insert_test_functions(scope: &mut Scope) {
+        let test_print = Rc::new(TestPrint {
+            calls: RefCell::new(0),
+        });
+        let test_println = Rc::new(TestPrintLn {
+            calls: RefCell::new(0),
+        });
+        scope.native_funcs.insert("print".to_string(), test_print);
+        scope
+            .native_funcs
+            .insert("println".to_string(), test_println);
     }
 
     #[test]
@@ -60,10 +106,7 @@ mod tests {
             "None",
             format!(
                 "{:?}",
-                ExprParser::new()
-                    .parse("a + 1")
-                    .unwrap()
-                    .eval_default(&mut scopes)
+                ExprParser::new().parse("a + 1").unwrap().eval(&mut scopes)
             )
         );
 
@@ -76,7 +119,7 @@ mod tests {
                 ProgramParser::new()
                     .parse("let a = 1 + 2")
                     .unwrap()
-                    .exec_default(&mut scopes)
+                    .exec(&mut scopes)
             )
         );
         assert_eq!(Some(&Value::Int(3)), scopes.resolve_var("a"));
@@ -86,30 +129,21 @@ mod tests {
             "Int(4)",
             format!(
                 "{:?}",
-                ExprParser::new()
-                    .parse("a + 1")
-                    .unwrap()
-                    .eval_default(&mut scopes)
+                ExprParser::new().parse("a + 1").unwrap().eval(&mut scopes)
             )
         );
         assert_eq!(
             "Int(9)",
             format!(
                 "{:?}",
-                ExprParser::new()
-                    .parse("a * a")
-                    .unwrap()
-                    .eval_default(&mut scopes)
+                ExprParser::new().parse("a * a").unwrap().eval(&mut scopes)
             )
         );
         assert_eq!(
             "Real(1.5)",
             format!(
                 "{:?}",
-                ExprParser::new()
-                    .parse("a / 2")
-                    .unwrap()
-                    .eval_default(&mut scopes)
+                ExprParser::new().parse("a / 2").unwrap().eval(&mut scopes)
             )
         );
     }
@@ -203,7 +237,7 @@ mod tests {
         ProgramParser::new()
             .parse("fn test(b) { return b; }; let a = 1 + 2 * 3 / 4 + test(42);")
             .unwrap()
-            .exec_default(&mut scopes);
+            .exec(&mut scopes);
         assert_eq!(Some(&Value::Real(44.5)), scopes.resolve_var("a"));
     }
 
@@ -213,7 +247,7 @@ mod tests {
         ProgramParser::new()
             .parse("let a = 1; fn test(z) { return a + z; }; let b = test(2); let c = a;")
             .unwrap()
-            .exec_default(&mut scopes);
+            .exec(&mut scopes);
         assert_eq!(Some(&Value::Int(1)), scopes.resolve_var("a"));
         assert_eq!(Some(&Value::Int(3)), scopes.resolve_var("b"));
         assert_eq!(Some(&Value::Int(1)), scopes.resolve_var("c"));
@@ -227,110 +261,77 @@ mod tests {
             "Bool(true)",
             format!(
                 "{:?}",
-                ExprParser::new()
-                    .parse("1 == 1")
-                    .unwrap()
-                    .eval_default(&mut scopes)
+                ExprParser::new().parse("1 == 1").unwrap().eval(&mut scopes)
             )
         );
         assert_eq!(
             "Bool(false)",
             format!(
                 "{:?}",
-                ExprParser::new()
-                    .parse("1 != 1")
-                    .unwrap()
-                    .eval_default(&mut scopes)
+                ExprParser::new().parse("1 != 1").unwrap().eval(&mut scopes)
             )
         );
         assert_eq!(
             "Bool(false)",
             format!(
                 "{:?}",
-                ExprParser::new()
-                    .parse("1 == 2")
-                    .unwrap()
-                    .eval_default(&mut scopes)
+                ExprParser::new().parse("1 == 2").unwrap().eval(&mut scopes)
             )
         );
         assert_eq!(
             "Bool(false)",
             format!(
                 "{:?}",
-                ExprParser::new()
-                    .parse("1 > 2")
-                    .unwrap()
-                    .eval_default(&mut scopes)
+                ExprParser::new().parse("1 > 2").unwrap().eval(&mut scopes)
             )
         );
         assert_eq!(
             "Bool(true)",
             format!(
                 "{:?}",
-                ExprParser::new()
-                    .parse("2 > 1")
-                    .unwrap()
-                    .eval_default(&mut scopes)
+                ExprParser::new().parse("2 > 1").unwrap().eval(&mut scopes)
             )
         );
         assert_eq!(
             "Bool(true)",
             format!(
                 "{:?}",
-                ExprParser::new()
-                    .parse("1 < 2")
-                    .unwrap()
-                    .eval_default(&mut scopes)
+                ExprParser::new().parse("1 < 2").unwrap().eval(&mut scopes)
             )
         );
         assert_eq!(
             "Bool(false)",
             format!(
                 "{:?}",
-                ExprParser::new()
-                    .parse("2 < 1")
-                    .unwrap()
-                    .eval_default(&mut scopes)
+                ExprParser::new().parse("2 < 1").unwrap().eval(&mut scopes)
             )
         );
         assert_eq!(
             "Bool(true)",
             format!(
                 "{:?}",
-                ExprParser::new()
-                    .parse("2 >= 2")
-                    .unwrap()
-                    .eval_default(&mut scopes)
+                ExprParser::new().parse("2 >= 2").unwrap().eval(&mut scopes)
             )
         );
         assert_eq!(
             "Bool(false)",
             format!(
                 "{:?}",
-                ExprParser::new()
-                    .parse("2 >= 3")
-                    .unwrap()
-                    .eval_default(&mut scopes)
+                ExprParser::new().parse("2 >= 3").unwrap().eval(&mut scopes)
             )
         );
         assert_eq!(
             "Bool(true)",
             format!(
                 "{:?}",
-                ExprParser::new()
-                    .parse("2 <= 2")
-                    .unwrap()
-                    .eval_default(&mut scopes)
+                ExprParser::new().parse("2 <= 2").unwrap().eval(&mut scopes)
             )
         );
         assert_eq!(
             "Bool(true)",
             format!(
                 "{:?}",
-                ExprParser::new()
-                    .parse("2 <= 3")
-                    .unwrap()
-                    .eval_default(&mut scopes)
+                ExprParser::new().parse("2 <= 3").unwrap().eval(&mut scopes)
             )
         );
         assert_eq!(
@@ -340,7 +341,7 @@ mod tests {
                 ExprParser::new()
                     .parse("\"a\" == \"a\"")
                     .unwrap()
-                    .eval_default(&mut scopes)
+                    .eval(&mut scopes)
             )
         );
         assert_eq!(
@@ -350,7 +351,7 @@ mod tests {
                 ExprParser::new()
                     .parse("\"a\" == \"b\"")
                     .unwrap()
-                    .eval_default(&mut scopes)
+                    .eval(&mut scopes)
             )
         );
         assert_eq!(
@@ -360,7 +361,7 @@ mod tests {
                 ExprParser::new()
                     .parse("(1 + 3) > 3")
                     .unwrap()
-                    .eval_default(&mut scopes)
+                    .eval(&mut scopes)
             )
         );
 
@@ -372,10 +373,7 @@ mod tests {
             "Int(3)",
             format!(
                 "{:?}",
-                ExprParser::new()
-                    .parse("1 + 2")
-                    .unwrap()
-                    .eval_default(&mut scopes)
+                ExprParser::new().parse("1 + 2").unwrap().eval(&mut scopes)
             )
         );
         assert_eq!(
@@ -385,7 +383,7 @@ mod tests {
                 ExprParser::new()
                     .parse("1 + 2.3")
                     .unwrap()
-                    .eval_default(&mut scopes)
+                    .eval(&mut scopes)
             )
         );
         assert_eq!(
@@ -395,7 +393,7 @@ mod tests {
                 ExprParser::new()
                     .parse("1.2 + 2")
                     .unwrap()
-                    .eval_default(&mut scopes)
+                    .eval(&mut scopes)
             )
         );
         assert_eq!(
@@ -405,7 +403,7 @@ mod tests {
                 ExprParser::new()
                     .parse("1.2 + 2.3")
                     .unwrap()
-                    .eval_default(&mut scopes)
+                    .eval(&mut scopes)
             )
         );
 
@@ -414,10 +412,7 @@ mod tests {
             "Int(-1)",
             format!(
                 "{:?}",
-                ExprParser::new()
-                    .parse("1 - 2")
-                    .unwrap()
-                    .eval_default(&mut scopes)
+                ExprParser::new().parse("1 - 2").unwrap().eval(&mut scopes)
             )
         );
         assert_eq!(
@@ -427,7 +422,7 @@ mod tests {
                 ExprParser::new()
                     .parse("1 - 2.5")
                     .unwrap()
-                    .eval_default(&mut scopes)
+                    .eval(&mut scopes)
             )
         );
         assert_eq!(
@@ -437,7 +432,7 @@ mod tests {
                 ExprParser::new()
                     .parse("1.2 - 2")
                     .unwrap()
-                    .eval_default(&mut scopes)
+                    .eval(&mut scopes)
             )
         );
         assert_eq!(
@@ -447,7 +442,7 @@ mod tests {
                 ExprParser::new()
                     .parse("1.2 - 2.5")
                     .unwrap()
-                    .eval_default(&mut scopes)
+                    .eval(&mut scopes)
             )
         );
 
@@ -456,10 +451,7 @@ mod tests {
             "Int(6)",
             format!(
                 "{:?}",
-                ExprParser::new()
-                    .parse("2 * 3")
-                    .unwrap()
-                    .eval_default(&mut scopes)
+                ExprParser::new().parse("2 * 3").unwrap().eval(&mut scopes)
             )
         );
         assert_eq!(
@@ -469,7 +461,7 @@ mod tests {
                 ExprParser::new()
                     .parse("2 * 3.4")
                     .unwrap()
-                    .eval_default(&mut scopes)
+                    .eval(&mut scopes)
             )
         );
         assert_eq!(
@@ -479,7 +471,7 @@ mod tests {
                 ExprParser::new()
                     .parse("2.5 * 3")
                     .unwrap()
-                    .eval_default(&mut scopes)
+                    .eval(&mut scopes)
             )
         );
         assert_eq!(
@@ -489,7 +481,7 @@ mod tests {
                 ExprParser::new()
                     .parse("2.5 * 1.5")
                     .unwrap()
-                    .eval_default(&mut scopes)
+                    .eval(&mut scopes)
             )
         );
 
@@ -498,10 +490,7 @@ mod tests {
             "Real(3.0)",
             format!(
                 "{:?}",
-                ExprParser::new()
-                    .parse("6 / 2")
-                    .unwrap()
-                    .eval_default(&mut scopes)
+                ExprParser::new().parse("6 / 2").unwrap().eval(&mut scopes)
             )
         );
         assert_eq!(
@@ -511,7 +500,7 @@ mod tests {
                 ExprParser::new()
                     .parse("6.7 / 2")
                     .unwrap()
-                    .eval_default(&mut scopes)
+                    .eval(&mut scopes)
             )
         );
         assert_eq!(
@@ -521,7 +510,7 @@ mod tests {
                 ExprParser::new()
                     .parse("6 / 2.5")
                     .unwrap()
-                    .eval_default(&mut scopes)
+                    .eval(&mut scopes)
             )
         );
         assert_eq!(
@@ -531,7 +520,7 @@ mod tests {
                 ExprParser::new()
                     .parse("6.7 / 2.5")
                     .unwrap()
-                    .eval_default(&mut scopes)
+                    .eval(&mut scopes)
             )
         );
 
@@ -543,7 +532,7 @@ mod tests {
                 ExprParser::new()
                     .parse("16 % 12")
                     .unwrap()
-                    .eval_default(&mut scopes)
+                    .eval(&mut scopes)
             )
         );
         assert_eq!(
@@ -553,7 +542,7 @@ mod tests {
                 ExprParser::new()
                     .parse("16 % 12.1")
                     .unwrap()
-                    .eval_default(&mut scopes)
+                    .eval(&mut scopes)
             )
         );
         assert_eq!(
@@ -563,7 +552,7 @@ mod tests {
                 ExprParser::new()
                     .parse("16.1 % 12")
                     .unwrap()
-                    .eval_default(&mut scopes)
+                    .eval(&mut scopes)
             )
         );
         assert_eq!(
@@ -573,7 +562,7 @@ mod tests {
                 ExprParser::new()
                     .parse("16.1 % 12.1")
                     .unwrap()
-                    .eval_default(&mut scopes)
+                    .eval(&mut scopes)
             )
         );
     }
@@ -589,7 +578,7 @@ mod tests {
                 ExprParser::new()
                     .parse("true  && true")
                     .unwrap()
-                    .eval_default(&mut scopes)
+                    .eval(&mut scopes)
             )
         );
         assert_eq!(
@@ -599,7 +588,7 @@ mod tests {
                 ExprParser::new()
                     .parse("true  && false")
                     .unwrap()
-                    .eval_default(&mut scopes)
+                    .eval(&mut scopes)
             )
         );
         assert_eq!(
@@ -609,7 +598,7 @@ mod tests {
                 ExprParser::new()
                     .parse("false && true")
                     .unwrap()
-                    .eval_default(&mut scopes)
+                    .eval(&mut scopes)
             )
         );
         assert_eq!(
@@ -619,7 +608,7 @@ mod tests {
                 ExprParser::new()
                     .parse("false && false")
                     .unwrap()
-                    .eval_default(&mut scopes)
+                    .eval(&mut scopes)
             )
         );
         assert_eq!(
@@ -629,7 +618,7 @@ mod tests {
                 ExprParser::new()
                     .parse("true  || true")
                     .unwrap()
-                    .eval_default(&mut scopes)
+                    .eval(&mut scopes)
             )
         );
         assert_eq!(
@@ -639,7 +628,7 @@ mod tests {
                 ExprParser::new()
                     .parse("true  || false")
                     .unwrap()
-                    .eval_default(&mut scopes)
+                    .eval(&mut scopes)
             )
         );
         assert_eq!(
@@ -649,7 +638,7 @@ mod tests {
                 ExprParser::new()
                     .parse("false || true")
                     .unwrap()
-                    .eval_default(&mut scopes)
+                    .eval(&mut scopes)
             )
         );
         assert_eq!(
@@ -659,7 +648,7 @@ mod tests {
                 ExprParser::new()
                     .parse("false || false")
                     .unwrap()
-                    .eval_default(&mut scopes)
+                    .eval(&mut scopes)
             )
         );
         assert_eq!(
@@ -669,7 +658,7 @@ mod tests {
                 ExprParser::new()
                     .parse("true  ^  true")
                     .unwrap()
-                    .eval_default(&mut scopes)
+                    .eval(&mut scopes)
             )
         );
         assert_eq!(
@@ -679,7 +668,7 @@ mod tests {
                 ExprParser::new()
                     .parse("true  ^  false")
                     .unwrap()
-                    .eval_default(&mut scopes)
+                    .eval(&mut scopes)
             )
         );
         assert_eq!(
@@ -689,7 +678,7 @@ mod tests {
                 ExprParser::new()
                     .parse("false ^  true")
                     .unwrap()
-                    .eval_default(&mut scopes)
+                    .eval(&mut scopes)
             )
         );
         assert_eq!(
@@ -699,7 +688,7 @@ mod tests {
                 ExprParser::new()
                     .parse("false ^  false")
                     .unwrap()
-                    .eval_default(&mut scopes)
+                    .eval(&mut scopes)
             )
         );
     }
@@ -711,7 +700,7 @@ mod tests {
         ProgramParser::new()
             .parse("let abc = 1 + 2; let bcd = 3 + 4; let cde = abc * bcd;")
             .unwrap()
-            .exec_default(&mut scopes);
+            .exec(&mut scopes);
         assert_eq!(Some(&Value::Int(3)), scopes.resolve_var("abc"));
         assert_eq!(Some(&Value::Int(7)), scopes.resolve_var("bcd"));
         assert_eq!(Some(&Value::Int(21)), scopes.resolve_var("cde"));
@@ -725,14 +714,14 @@ mod tests {
             .parse(
                 "fn add(a, b) { let c = a + b; return c; let c = 123; }; let res = add(1, 2 + 3);",
             ).unwrap()
-            .exec_default(&mut scopes);
+            .exec(&mut scopes);
         assert_eq!(Some(&Value::Int(6)), scopes.resolve_var("res"));
 
         // Functions without arguments
         ProgramParser::new()
             .parse("fn test() { return 42; }; let res = test();")
             .unwrap()
-            .exec_default(&mut scopes);
+            .exec(&mut scopes);
         assert_eq!(Some(&Value::Int(42)), scopes.resolve_var("res"));
     }
 
@@ -744,27 +733,27 @@ mod tests {
             .parse(
                 "let a = 1; if 1 == 1 { let a = 2; } else { let a = 3; }; if 1 != 2 { let a = 4; }",
             ).unwrap()
-            .exec_default(&mut scopes);
+            .exec(&mut scopes);
         assert_eq!(Some(&Value::Int(4)), scopes.resolve_var("a"));
         ProgramParser::new()
             .parse("if (1 == 2) || (1 == 1) { let a = 5; };")
             .unwrap()
-            .exec_default(&mut scopes);
+            .exec(&mut scopes);
         assert_eq!(Some(&Value::Int(5)), scopes.resolve_var("a"));
         ProgramParser::new()
             .parse("if (1 == 1) && (2 == 2) { let a = 6; };")
             .unwrap()
-            .exec_default(&mut scopes);
+            .exec(&mut scopes);
         assert_eq!(Some(&Value::Int(6)), scopes.resolve_var("a"));
         ProgramParser::new()
             .parse("if (1 == 1) ^ (2 == 2) { let a = 7; };")
             .unwrap()
-            .exec_default(&mut scopes);
+            .exec(&mut scopes);
         assert_eq!(Some(&Value::Int(6)), scopes.resolve_var("a"));
         ProgramParser::new()
             .parse("if 1 == 1 ^ 2 == 2 { let a = 8; };")
             .unwrap()
-            .exec_default(&mut scopes);
+            .exec(&mut scopes);
         assert_eq!(Some(&Value::Int(6)), scopes.resolve_var("a"));
     }
 
@@ -775,7 +764,7 @@ mod tests {
         ProgramParser::new()
             .parse("let a = 0; let b = 1; loop { let a = a + 1; let b = b * 2; if a > 5 { break; }; };")
             .unwrap()
-            .exec_default(&mut scopes);
+            .exec(&mut scopes);
         assert_eq!(Some(&Value::Int(6)), scopes.resolve_var("a"));
         assert_eq!(Some(&Value::Int(64)), scopes.resolve_var("b"));
     }
@@ -787,7 +776,7 @@ mod tests {
         ProgramParser::new()
             .parse("let a = !(1 == 1); let b = !(2 < 1);")
             .unwrap()
-            .exec_default(&mut scopes);
+            .exec(&mut scopes);
         assert_eq!(Some(&Value::Bool(false)), scopes.resolve_var("a"));
         assert_eq!(Some(&Value::Bool(true)), scopes.resolve_var("b"));
 
@@ -796,7 +785,7 @@ mod tests {
         ProgramParser::new()
             .parse("let a = true; let b = false; let c = !a; let d = !a && !b;")
             .unwrap()
-            .exec_default(&mut scopes);
+            .exec(&mut scopes);
         assert_eq!(Some(&Value::Bool(true)), scopes.resolve_var("a"));
         assert_eq!(Some(&Value::Bool(false)), scopes.resolve_var("b"));
         assert_eq!(Some(&Value::Bool(false)), scopes.resolve_var("c"));
@@ -805,27 +794,53 @@ mod tests {
 
     #[test]
     fn lib_interpret() {
-        let mut iface = TestingScriptInterface::new();
-        let scope = Scope::new();
-        let res = interpret("return 42", scope, &mut iface);
-        match res {
+        let mut scope = Scope::new();
+        insert_test_functions(&mut scope);
+        let res = interpret("return 42", scope);
+        match res.exec_result {
             ExecResult::None => assert!(false, "interpret() should not have returned None"),
             ExecResult::Break => assert!(false, "interpret() should not have returned Break"),
             ExecResult::Return(x) => assert_eq!(Value::Int(42), x),
             ExecResult::Error(e) => assert!(false, e),
         };
-        assert_eq!(0, iface.print_count);
-        assert_eq!(0, iface.println_count);
-        let scope = Scope::new();
-        let res = interpret("!&*", scope, &mut iface);
-        match res {
+        res.scope_chain
+            .resolve_native_func("print")
+            .unwrap()
+            .as_any()
+            .downcast_ref::<TestPrint>()
+            .unwrap()
+            .assert_calls(0);
+        res.scope_chain
+            .resolve_native_func("println")
+            .unwrap()
+            .as_any()
+            .downcast_ref::<TestPrintLn>()
+            .unwrap()
+            .assert_calls(0);
+
+        let mut scope = Scope::new();
+        insert_test_functions(&mut scope);
+        let res = interpret("!&*", scope);
+        match res.exec_result {
             ExecResult::None => assert!(false, "interpret() should not have returned None"),
             ExecResult::Break => assert!(false, "interpret() should not have returned Break"),
             ExecResult::Return(_) => assert!(false, "interpret() should not have returned Return"),
             ExecResult::Error(e) => assert_eq!("Unable to parse program source", e),
         };
-        assert_eq!(0, iface.print_count);
-        assert_eq!(0, iface.println_count);
+        res.scope_chain
+            .resolve_native_func("print")
+            .unwrap()
+            .as_any()
+            .downcast_ref::<TestPrint>()
+            .unwrap()
+            .assert_calls(0);
+        res.scope_chain
+            .resolve_native_func("println")
+            .unwrap()
+            .as_any()
+            .downcast_ref::<TestPrintLn>()
+            .unwrap()
+            .assert_calls(0);
 
         // Complex function (Fibonacci)
         let src = r#"
@@ -838,22 +853,23 @@ mod tests {
                     let temp = res;
                     let res = res + prev;
                     let prev = temp;
-                    print res;
-                    print ", ";
+                    print(res);
+                    print(", ");
                     let count = count - 1;
                     if count <= 1 {
                         break;
                     };
                 };
-                println "";
+                println("");
                 return res;
             };
 
             return fib(8);
         "#;
-        let scope = Scope::new();
-        let res = interpret(src, scope, &mut iface);
-        match res {
+        let mut scope = Scope::new();
+        insert_test_functions(&mut scope);
+        let res = interpret(src, scope);
+        match res.exec_result {
             ExecResult::None => assert!(false, "interpret() should not have returned None"),
             ExecResult::Break => assert!(false, "interpret() should not have returned Break"),
             ExecResult::Return(x) => assert_eq!(Value::Int(21), x),
@@ -862,8 +878,20 @@ mod tests {
 
         // print should have been invoked twice per loop (=14)
         // println should have been invoked once (after loop)
-        assert_eq!(14, iface.print_count);
-        assert_eq!(1, iface.println_count);
+        res.scope_chain
+            .resolve_native_func("print")
+            .unwrap()
+            .as_any()
+            .downcast_ref::<TestPrint>()
+            .unwrap()
+            .assert_calls(14);
+        res.scope_chain
+            .resolve_native_func("println")
+            .unwrap()
+            .as_any()
+            .downcast_ref::<TestPrintLn>()
+            .unwrap()
+            .assert_calls(1);
 
         // Complex function (recursive factorial)
         let src = r#"
@@ -880,13 +908,58 @@ mod tests {
 
             return fact(4);
         "#;
-        let scope = Scope::new();
-        let res = interpret(src, scope, &mut iface);
-        match res {
+        let mut scope = Scope::new();
+        insert_test_functions(&mut scope);
+        let res = interpret(src, scope);
+        match res.exec_result {
             ExecResult::None => assert!(false, "interpret() should not have returned None"),
             ExecResult::Break => assert!(false, "interpret() should not have returned Break"),
             ExecResult::Return(x) => assert_eq!(Value::Int(24), x),
             ExecResult::Error(e) => assert!(false, e),
         };
+        res.scope_chain
+            .resolve_native_func("print")
+            .unwrap()
+            .as_any()
+            .downcast_ref::<TestPrint>()
+            .unwrap()
+            .assert_calls(0);
+        res.scope_chain
+            .resolve_native_func("println")
+            .unwrap()
+            .as_any()
+            .downcast_ref::<TestPrintLn>()
+            .unwrap()
+            .assert_calls(0);
+    }
+
+    #[test]
+    fn native_functions() {
+        struct TestFunc {};
+        impl NativeFunction for TestFunc {
+            fn execute(&self, _scopes: &mut ScopeChain, args: &Vec<Value>) -> Value {
+                match args[0] {
+                    Value::Int(x) => Value::Int(x + 40),
+                    _ => Value::None,
+                }
+            }
+            fn as_any(&self) -> &Any {
+                self
+            }
+        };
+        let test_func = TestFunc {};
+        let mut scope = Scope::new();
+        scope
+            .native_funcs
+            .insert("test_func".to_string(), Rc::new(test_func));
+
+        let mut scopes = ScopeChain::from_scope(scope);
+
+        ProgramParser::new()
+            .parse("let a = test_func(1) + 1; let b = test_func(12) * 3;")
+            .unwrap()
+            .exec(&mut scopes);
+        assert_eq!(Some(&Value::Int(42)), scopes.resolve_var("a"));
+        assert_eq!(Some(&Value::Int(156)), scopes.resolve_var("b"));
     }
 }

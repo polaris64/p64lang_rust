@@ -37,11 +37,6 @@ Stmt: Box<Stmt> = {
     // Variable declarations
     "let" <Id> "=" <Expr> => Box::new(Stmt::Let(<>)),
 
-    // Printing
-    "print" <Expr>   => Box::new(Stmt::Print(<>, false)),
-    "println" <Expr> => Box::new(Stmt::Print(<>, true)),
-
-
     // Function definitions and related
     "fn" <Id> "(" <DelimitedList<Id, ",">> ")" "{" <Stmts> "}" => Box::new(Stmt::FnDef(<>)),
     "return" <Expr>                                            => Box::new(Stmt::Return(<>)),
@@ -53,6 +48,8 @@ Stmt: Box<Stmt> = {
     // Loops and related
     "loop" "{" <Stmts> "}" => Box::new(Stmt::Loop(<>)),
     "break"                => Box::new(Stmt::Break),
+
+    <Expr> => Box::new(Stmt::Expr(<>)),
 };
 
 // Expression non-terminal (precedence hierarchy Expr -> Term)
