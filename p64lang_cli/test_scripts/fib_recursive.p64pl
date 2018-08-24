@@ -5,10 +5,7 @@ fn fib(n) {
 
 let counter = 0;
 loop {
-  print("fib(");
-  print(counter);
-  print(") = ");
-  println(fib(counter));
+  println("fib(", counter, ") = ", fib(counter));
   let counter = counter + 1;
   if counter > 28 { break; };
 }
