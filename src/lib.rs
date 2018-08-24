@@ -962,4 +962,47 @@ mod tests {
         assert_eq!(Some(&Value::Int(42)), scopes.resolve_var("a"));
         assert_eq!(Some(&Value::Int(156)), scopes.resolve_var("b"));
     }
+
+    #[test]
+    fn lists() {
+        let mut scopes = ScopeChain::from_scope(Scope::new());
+        ProgramParser::new()
+            .parse("let a = [1, \"test\", 2]; let b = a[1];")
+            .unwrap()
+            .exec(&mut scopes);
+        assert_eq!(
+            Some(&Value::List(vec![
+                Value::Int(1),
+                Value::Str("test".to_string()),
+                Value::Int(2)
+            ])),
+            scopes.resolve_var("a")
+        );
+        assert_eq!(
+            Some(&Value::Str("test".to_string())),
+            scopes.resolve_var("b")
+        );
+
+        let mut scopes = ScopeChain::from_scope(Scope::new());
+        ProgramParser::new()
+            .parse("let a = [1, \"test\", 2]; a[0] = 40 + 2; a[4] = \"test2\"; let b = a[0]; let c = a[3]; let d = a[4];")
+            .unwrap()
+            .exec(&mut scopes);
+        assert_eq!(
+            Some(&Value::List(vec![
+                Value::Int(42),
+                Value::Str("test".to_string()),
+                Value::Int(2),
+                Value::None,
+                Value::Str("test2".to_string()),
+            ])),
+            scopes.resolve_var("a")
+        );
+        assert_eq!(Some(&Value::Int(42)), scopes.resolve_var("b"));
+        assert_eq!(Some(&Value::None), scopes.resolve_var("c"));
+        assert_eq!(
+            Some(&Value::Str("test2".to_string())),
+            scopes.resolve_var("d")
+        );
+    }
 }

@@ -49,6 +49,9 @@ Stmt: Box<Stmt> = {
     "loop" "{" <Stmts> "}" => Box::new(Stmt::Loop(<>)),
     "break"                => Box::new(Stmt::Break),
 
+    // List element assignment
+    <Id> "[" <Expr> "]" "=" <Expr> => Box::new(Stmt::ListItemAssignment(<>)),
+
     <Expr> => Box::new(Stmt::Expr(<>)),
 };
 
@@ -116,6 +119,8 @@ Term: Box<Expr> = {
     Id          => Box::new(Expr::Id(<>)),
     "(" <Expr> ")",
     <Id> "(" <DelimitedList<Expr, ",">> ")" => Box::new(Expr::FuncCall(<>)),
+    "[" <DelimitedList<Expr, ",">> "]" => Box::new(Expr::List(<>)),
+    <Id> "[" <Expr> "]" => Box::new(Expr::ListElement(<>)),
     UnaryOp Term => Box::new(Expr::UnaryOp(<>)),
 };
 

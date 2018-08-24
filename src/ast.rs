@@ -56,6 +56,20 @@ impl ScopeChain {
         };
     }
 
+    pub fn insert_list_item(&mut self, key: &str, idx: usize, val: Value) {
+        for scope in self.scopes.iter_mut().rev() {
+            if let Some(ref mut scope_val) = scope.vars.get_mut(key) {
+                if let Value::List(ref mut lst) = scope_val {
+                    if lst.len() <= idx {
+                        lst.resize(idx + 1, Value::None);
+                    }
+                    lst[idx] = val;
+                    break;
+                }
+            }
+        }
+    }
+
     pub fn insert_var(&mut self, key: &str, val: Value) {
         match self.scopes.last_mut() {
             Some(ref mut scope) => scope.vars.insert(key.clone().to_string(), val),
@@ -108,6 +122,7 @@ pub enum Stmt {
     Break,
     Loop(StmtBlock),
     Expr(Box<Expr>),
+    ListItemAssignment(Ident, Box<Expr>, Box<Expr>),
 }
 
 // Language expression: numbers/identifiers and operations thereon
@@ -121,6 +136,8 @@ pub enum Expr {
     BinOp(Box<Expr>, Opcode, Box<Expr>),
     UnaryOp(Opcode, Box<Expr>),
     FuncCall(Ident, Vec<Box<Expr>>),
+    List(Vec<Box<Expr>>),
+    ListElement(Ident, Box<Expr>),
 }
 
 // Language identifier
@@ -270,7 +287,8 @@ impl Opcode {
         match *self {
             Opcode::Not => match x {
                 Value::Bool(x) => Value::Bool(!x),
-                _ => Value::None,
+                Value::None => Value::Bool(true),
+                _ => Value::Bool(false),
             },
             _ => Value::None,
         }
@@ -285,6 +303,7 @@ pub enum Value {
     Real(f64),
     Str(String),
     Bool(bool),
+    List(Vec<Value>),
 }
 
 // Result of executing an Executable
@@ -353,6 +372,26 @@ impl Evaluatable for Expr {
             Expr::Bool(x) => Value::Bool(x),
             Expr::BinOp(ref l, ref opc, ref r) => opc.eval(l.eval(scopes), r.eval(scopes)),
             Expr::UnaryOp(ref opc, ref x) => opc.eval_unary(x.eval(scopes)),
+            Expr::List(ref exprs) => {
+                Value::List(exprs.iter().map(|x| x.eval(scopes)).collect::<Vec<Value>>())
+            }
+            Expr::ListElement(ref id, ref expr) => {
+                let idx = expr.eval(scopes);
+                if let Value::Int(idx) = idx {
+                    match scopes.resolve_var(id) {
+                        Some(x) => match x {
+                            Value::List(ref list) => match list.get(idx as usize) {
+                                Some(x) => x.clone(),
+                                None => Value::None,
+                            },
+                            _ => Value::None,
+                        },
+                        None => Value::None,
+                    }
+                } else {
+                    Value::None
+                }
+            }
             Expr::Id(ref x) => match scopes.resolve_var(x) {
                 Some(x) => x.clone(),
                 None => Value::None,
@@ -433,6 +472,15 @@ impl Executable for Stmt {
 
             Stmt::Expr(ref exp) => {
                 exp.eval(scopes);
+                ExecResult::None
+            }
+
+            Stmt::ListItemAssignment(ref id, ref idx, ref val) => {
+                let idx = idx.eval(scopes);
+                if let Value::Int(x) = idx {
+                    let val = val.eval(scopes);
+                    scopes.insert_list_item(id, x as usize, val);
+                };
                 ExecResult::None
             }
         }
