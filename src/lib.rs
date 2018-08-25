@@ -1,22 +1,36 @@
 pub mod ast;
+pub mod interpreter;
 mod p64lang;
 pub mod runtime;
 
-use ast::{ExecResult, Executable, Scope, ScopeChain};
+use ast::{ExecResult, Executable};
+use interpreter::{Scope, ScopeChain};
 use p64lang::ProgramParser;
 use runtime::insert_native_functions;
 
+/// Result of parsing and executing code
+///
+///   - `exec_result`: actual resulting value from execution
+///   - `scope_chain`: ScopeChain after execution
 pub struct InterpretResult {
     pub exec_result: ExecResult,
     pub scope_chain: ScopeChain,
 }
 
+/// Gets a Scope containing the runtime module's default NativeFunctions
 pub fn get_default_global_scope() -> Scope {
     let mut scope = Scope::new();
     insert_native_functions(&mut scope);
     scope
 }
 
+/// Interprets given source code under a Scope
+///
+/// # Params
+///
+///   - `src: &str`: source code to parse and execute
+///   - `global_scope: Scope`: root scope under which to execute the code
+///
 pub fn interpret(src: &str, global_scope: Scope) -> InterpretResult {
     let mut scopes = ScopeChain::from_scope(global_scope);
     InterpretResult {
@@ -31,7 +45,8 @@ pub fn interpret(src: &str, global_scope: Scope) -> InterpretResult {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use ast::{Evaluatable, Executable, NativeFunction, Scope, ScopeChain, Value};
+    use ast::{Evaluatable, Executable, NativeFunction, Value};
+    use interpreter::{Scope, ScopeChain};
     use p64lang::{ExprParser, ProgramParser};
     use std::any::Any;
     use std::cell::RefCell;

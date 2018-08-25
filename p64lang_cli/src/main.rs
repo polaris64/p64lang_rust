@@ -2,8 +2,8 @@ extern crate p64lang;
 
 use std::io::{self, Read};
 
-use p64lang::ast::Scope;
 use p64lang::interpret;
+use p64lang::interpreter::Scope;
 use p64lang::runtime::insert_native_functions;
 
 fn main() {

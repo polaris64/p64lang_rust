@@ -1,12 +1,19 @@
 use std::any::Any;
 use std::rc::Rc;
 
-use ast::{NativeFunction, Scope, ScopeChain, Value};
+use ast::{NativeFunction, Value};
+use interpreter::{Scope, ScopeChain};
 
+/// Native "print" function
 pub struct NFPrint;
+
+/// Native "println" function
 pub struct NFPrintLn;
 
 impl NativeFunction for NFPrint {
+    /// Execute the "print" NativeFunction
+    ///
+    /// Prints all arguments in turn to stdout.
     fn execute(&self, _scopes: &mut ScopeChain, args: &Vec<Value>) -> Value {
         for arg in args {
             match arg {
@@ -24,6 +31,9 @@ impl NativeFunction for NFPrint {
 }
 
 impl NativeFunction for NFPrintLn {
+    /// Execute the "println" NativeFunction
+    ///
+    /// Prints all arguments in turn to stdout, followed by a newline.
     fn execute(&self, _scopes: &mut ScopeChain, args: &Vec<Value>) -> Value {
         for arg in args {
             match arg {
@@ -36,11 +46,14 @@ impl NativeFunction for NFPrintLn {
         println!("");
         Value::None
     }
+
     fn as_any(&self) -> &Any {
         self
     }
 }
 
+/// Takes a Scope and inserts the NativeFunctions defined in this runtime module for use within
+/// scripts.
 pub fn insert_native_functions(scope: &mut Scope) {
     scope
         .native_funcs
