@@ -1,4 +1,5 @@
 use std::any::Any;
+use std::collections::HashMap;
 
 use interpreter::ScopeChain;
 
@@ -21,6 +22,7 @@ pub enum ExecResult {
 pub enum Expr {
     BinOp(Box<Expr>, Opcode, Box<Expr>),
     Bool(bool),
+    Dict(Vec<(Ident, Box<Expr>)>),
     FuncCall(Ident, Vec<Box<Expr>>),
     Id(Ident),
     Int(isize),
@@ -95,6 +97,7 @@ pub type StmtBlock = Vec<Box<Stmt>>;
 #[derive(Clone, Debug, PartialEq)]
 pub enum Value {
     Bool(bool),
+    Dict(HashMap<Ident, Value>),
     Int(isize),
     List(Vec<Value>),
     None,

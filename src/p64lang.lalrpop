@@ -120,10 +120,17 @@ Term: Box<Expr> = {
     "(" <Expr> ")",
     <Id> "(" <DelimitedList<Expr, ",">> ")" => Box::new(Expr::FuncCall(<>)),
     "[" <DelimitedList<Expr, ",">> "]" => Box::new(Expr::List(<>)),
+    "{" <DelimitedList<KeyVal, ",">> "}" => Box::new(Expr::Dict(<>)),
     <Id> "[" <Expr> "]" => Box::new(Expr::ListElement(<>)),
     UnaryOp Term => Box::new(Expr::UnaryOp(<>)),
 };
 
+// Key (string) / value (expression) pair: used for constructing Dicts
+KeyVal: (String, Box<Expr>) = {
+    <LiteralStr> ":" <Expr> => (<>),
+};
+
+// Operators taking a single operand
 UnaryOp: Opcode = {
     "!" => Opcode::Not,
 };

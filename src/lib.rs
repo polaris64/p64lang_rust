@@ -44,13 +44,16 @@ pub fn interpret(src: &str, global_scope: Scope) -> InterpretResult {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use ast::{Evaluatable, Executable, NativeFunction, Value};
-    use interpreter::{Scope, ScopeChain};
-    use p64lang::{ExprParser, ProgramParser};
     use std::any::Any;
     use std::cell::RefCell;
+    use std::collections::HashMap;
     use std::rc::Rc;
+
+    use super::*;
+
+    use ast::{Evaluatable, Executable, Ident, NativeFunction, Value};
+    use interpreter::{Scope, ScopeChain};
+    use p64lang::{ExprParser, ProgramParser};
 
     struct TestPrint {
         calls: RefCell<usize>,
@@ -1019,5 +1022,20 @@ mod tests {
             Some(&Value::Str("test2".to_string())),
             scopes.resolve_var("d")
         );
+    }
+
+    #[test]
+    fn dicts() {
+        let mut scopes = ScopeChain::from_scope(Scope::new());
+        ProgramParser::new()
+            .parse("let a = {\"d1\": 1 + 2, \"d2\": \"second\"}; let b = a[\"d1\"]; a[\"d2\"] = \"third\"; a[\"d3\"] = \"fourth\";")
+            .unwrap()
+            .exec(&mut scopes);
+        let mut expected = HashMap::<Ident, Value>::new();
+        expected.insert("d1".to_string(), Value::Int(3));
+        expected.insert("d2".to_string(), Value::Str("third".to_string()));
+        expected.insert("d3".to_string(), Value::Str("fourth".to_string()));
+        assert_eq!(&Value::Dict(expected), scopes.resolve_var("a").unwrap());
+        assert_eq!(Some(&Value::Int(3)), scopes.resolve_var("b"));
     }
 }

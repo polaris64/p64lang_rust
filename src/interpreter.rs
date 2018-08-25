@@ -11,9 +11,9 @@ use ast::{
 /// Contains HashMaps mapping Idents to Functions, NativeFunctions and Values (variables) in the
 /// scope
 pub struct Scope {
-    pub funcs: HashMap<String, Rc<Function>>,
-    pub native_funcs: HashMap<String, Rc<NativeFunction>>,
-    pub vars: HashMap<String, Value>,
+    pub funcs: HashMap<Ident, Rc<Function>>,
+    pub native_funcs: HashMap<Ident, Rc<NativeFunction>>,
+    pub vars: HashMap<Ident, Value>,
 }
 impl Scope {
     /// Create an empty Scope
@@ -74,6 +74,18 @@ impl ScopeChain {
             Some(ref mut scope) => scope.funcs.insert(key.clone().to_string(), Rc::new(val)),
             _ => None,
         };
+    }
+
+    /// Inserts a Value `val` into the dict identified by `key` at index `idx`
+    pub fn insert_dict_item(&mut self, key: &str, idx: &str, val: Value) {
+        for scope in self.scopes.iter_mut().rev() {
+            if let Some(ref mut scope_val) = scope.vars.get_mut(key) {
+                if let Value::Dict(ref mut dict) = scope_val {
+                    dict.insert(idx.to_string(), val);
+                    break;
+                }
+            }
+        }
     }
 
     /// Inserts a Value `val` into the list identified by `key` at index `idx`
@@ -314,6 +326,13 @@ impl Evaluatable for Expr {
         match *self {
             Expr::BinOp(ref l, ref opc, ref r) => opc.eval(l.eval(scopes), r.eval(scopes)),
             Expr::Bool(x) => Value::Bool(x),
+            Expr::Dict(ref items) => {
+                let mut map = HashMap::<Ident, Value>::new();
+                for item in items.iter() {
+                    map.insert(item.0.clone(), item.1.eval(scopes));
+                }
+                Value::Dict(map)
+            },
             Expr::FuncCall(ref func_id, ref args) => {
                 let eval_args = args.iter().map(|x| x.eval(scopes)).collect::<Vec<Value>>();
 
@@ -334,20 +353,35 @@ impl Evaluatable for Expr {
                 Value::List(exprs.iter().map(|x| x.eval(scopes)).collect::<Vec<Value>>())
             }
             Expr::ListElement(ref id, ref expr) => {
-                let idx = expr.eval(scopes);
-                if let Value::Int(idx) = idx {
-                    match scopes.resolve_var(id) {
-                        Some(x) => match x {
+                
+                // Match index: Value::Str for Dict index, Value::Int for List index
+                let coll_idx = expr.eval(scopes);
+                let var = scopes.resolve_var(id);
+
+                match var {
+                    Some(ref val) => match coll_idx {
+
+                        // Int index: val must be a List
+                        Value::Int(idx) => match val {
                             Value::List(ref list) => match list.get(idx as usize) {
                                 Some(x) => x.clone(),
                                 None => Value::None,
                             },
                             _ => Value::None,
                         },
-                        None => Value::None,
+
+                        // Str index: val must be a Dict
+                        Value::Str(ref s) => match val {
+                            Value::Dict(ref dict) => match dict.get(s) {
+                                Some(x) => x.clone(),
+                                None => Value::None,
+                            },
+                            _ => Value::None,
+                        },
+
+                        _ => Value::None,
                     }
-                } else {
-                    Value::None
+                    None => Value::None,
                 }
             }
             Expr::Real(x) => Value::Real(x),
@@ -419,9 +453,11 @@ impl Executable for Stmt {
             // Assign a Value to a list item (integer index)
             Stmt::ListItemAssignment(ref id, ref idx, ref val) => {
                 let idx = idx.eval(scopes);
-                if let Value::Int(x) = idx {
-                    let val = val.eval(scopes);
-                    scopes.insert_list_item(id, x as usize, val);
+                let val = val.eval(scopes);
+                match idx {
+                    Value::Int(x) => scopes.insert_list_item(id, x as usize, val),
+                    Value::Str(x) => scopes.insert_dict_item(id, &x, val),
+                    _ => {},
                 };
                 ExecResult::None
             }
