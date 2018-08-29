@@ -28,6 +28,7 @@ pub enum Expr {
     Int(isize),
     ListElement(Ident, Box<Expr>),
     List(Vec<Box<Expr>>),
+    None,
     Real(f64),
     Str(String),
     UnaryOp(Opcode, Box<Expr>),
@@ -78,20 +79,20 @@ pub enum Opcode {
 #[derive(Clone, Debug, PartialEq)]
 pub enum Stmt {
     Break,
-    Expr(Box<Expr>),
+    Expr(Expr),
     FnDef(Ident, Vec<Ident>, StmtBlock),
-    If(Box<Expr>, StmtBlock),
-    IfElse(Box<Expr>, StmtBlock, StmtBlock),
-    Let(Ident, Box<Expr>),
-    ListItemAssignment(Ident, Box<Expr>, Box<Expr>),
+    If(Expr, StmtBlock),
+    IfElse(Expr, StmtBlock, StmtBlock),
+    Let(Ident, Expr),
+    ListItemAssignment(Ident, Expr, Expr),
     Loop(StmtBlock),
-    Return(Box<Expr>),
+    Return(Expr),
 }
 
 /// Statement block
 ///
 /// A block of zero or more Stmts
-pub type StmtBlock = Vec<Box<Stmt>>;
+pub type StmtBlock = Vec<Stmt>;
 
 /// Result of evaluating an Evaluatable
 #[derive(Clone, Debug, PartialEq)]

@@ -3,9 +3,5 @@ name = "p64lang"
 version = "0.1.0"
 authors = ["Simon Pugnet <simon@polaris64.net>"]
 
-[build-dependencies]
-lalrpop = "0.15.2"
-
 [dependencies]
-lalrpop-util = "0.15.2"
-regex = "0.2.1"
+nom = "4.0.0"

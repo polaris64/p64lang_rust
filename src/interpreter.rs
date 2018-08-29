@@ -384,6 +384,7 @@ impl Evaluatable for Expr {
                     None => Value::None,
                 }
             }
+            Expr::None => Value::None,
             Expr::Real(x) => Value::Real(x),
             Expr::Str(ref x) => Value::Str(x.to_string()),
             Expr::UnaryOp(ref opc, ref x) => opc.eval_unary(x.eval(scopes)),
