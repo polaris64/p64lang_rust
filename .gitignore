@@ -3,4 +3,5 @@
 Cargo.lock
 
 /p64lang_cli/target
+/p64lang_wasm/target
 /p64lang/Cargo.lock

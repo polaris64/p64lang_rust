@@ -1,0 +1,75 @@
+extern crate p64lang;
+extern crate wasm_bindgen;
+
+use std::any::Any;
+use std::rc::Rc;
+
+use wasm_bindgen::prelude::*;
+
+use p64lang::ast::{NativeFunction, Value};
+use p64lang::interpreter::{Scope, ScopeChain};
+use p64lang::interpret;
+
+struct NFPrint;
+impl NativeFunction for NFPrint {
+    fn execute<'src>(&self, _scopes: &mut ScopeChain<'src>, args: &Vec<Value<'src>>) -> Value<'src> {
+        let mut buf = String::new();
+        for arg in args {
+            match arg {
+                Value::Int(x)  => buf.push_str(&format!("{}", x)),
+                Value::Real(x) => buf.push_str(&format!("{}", x)),
+                Value::Str(x)  => buf.push_str(x),
+                _ => buf.push_str(&format!("{:?}", arg)),
+            }
+        }
+        js_print(buf.as_str(), false);
+        Value::None
+    }
+
+    fn as_any(&self) -> &Any {
+        self
+    }
+}
+
+struct NFPrintLn;
+impl NativeFunction for NFPrintLn {
+    fn execute<'src>(&self, _scopes: &mut ScopeChain<'src>, args: &Vec<Value<'src>>) -> Value<'src> {
+        let mut buf = String::new();
+        for arg in args {
+            match arg {
+                Value::Int(x)  => buf.push_str(&format!("{}", x)),
+                Value::Real(x) => buf.push_str(&format!("{}", x)),
+                Value::Str(x)  => buf.push_str(x),
+                _ => buf.push_str(&format!("{:?}", arg)),
+            }
+        }
+        js_print(buf.as_str(), true);
+        Value::None
+    }
+
+    fn as_any(&self) -> &Any {
+        self
+    }
+}
+
+#[wasm_bindgen(module = "./index.js")]
+extern {
+    fn js_print(s: &str, nl: bool);
+}
+
+#[wasm_bindgen]
+pub fn interpret_str(src: &str) -> String {
+    let mut scope = Scope::new();
+    scope.native_funcs.insert("print",   Rc::new(NFPrint {}));
+    scope.native_funcs.insert("println", Rc::new(NFPrintLn {}));
+    let res = interpret(src, scope);
+    format!("Result: {:?}", res.exec_result)
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn it_works() {
+        assert_eq!(2 + 2, 4);
+    }
+}

@@ -1,0 +1,11 @@
+[package]
+name = "p64lang_wasm"
+version = "0.1.0"
+authors = ["Simon Pugnet <simon@polaris64.net>"]
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+wasm-bindgen = "0.2"
+p64lang = { path = "../", default-features = false, features = ["no_std"] }
