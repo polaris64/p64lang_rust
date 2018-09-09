@@ -1,3 +1,10 @@
+#![cfg_attr(feature = "no_std", feature(alloc))]
+#![cfg_attr(feature = "no_std", no_std)]
+
+#[cfg(feature = "no_std")]
+#[macro_use]
+extern crate alloc;
+
 #[macro_use]
 extern crate nom;
 
@@ -46,7 +53,7 @@ pub fn interpret<'src>(src: &'src str, global_scope: Scope<'src>) -> InterpretRe
     }
 }
 
-#[cfg(test)]
+#[cfg(all(test, not(feature = "no_std")))]
 mod tests {
     use std::any::Any;
     use std::cell::RefCell;

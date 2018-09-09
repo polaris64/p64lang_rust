@@ -1,5 +1,14 @@
+#[cfg(not(feature = "no_std"))]
 use std::collections::HashMap;
+#[cfg(feature = "no_std")]
+use alloc::collections::BTreeMap;
+
+#[cfg(not(feature = "no_std"))]
 use std::rc::Rc;
+#[cfg(feature = "no_std")]
+use alloc::rc::Rc;
+#[cfg(feature = "no_std")]
+use alloc::vec::Vec;
 
 use ast::{
     Evaluatable, ExecResult, Executable, Expr, Function, Ident, NativeFunction, Opcode, Stmt,
@@ -11,19 +20,39 @@ use ast::{
 /// Contains HashMaps mapping Idents to Functions, NativeFunctions and Values (variables) in the
 /// scope
 pub struct Scope<'src> {
-    pub funcs:        HashMap<Ident<'src>, Rc<Function<'src>>>,
+
+    #[cfg(not(feature = "no_std"))]
+    pub funcs: HashMap<Ident<'src>, Rc<Function<'src>>>,
+    #[cfg(feature = "no_std")]
+    pub funcs: BTreeMap<Ident<'src>, Rc<Function<'src>>>,
+
+    #[cfg(not(feature = "no_std"))]
     pub native_funcs: HashMap<Ident<'src>, Rc<NativeFunction>>,
+    #[cfg(feature = "no_std")]
+    pub native_funcs: BTreeMap<Ident<'src>, Rc<NativeFunction>>,
 
     // TODO: vars: HashMap<Ident, &Value> to avoid clone?
-    pub vars:         HashMap<Ident<'src>, Value<'src>>,
+    #[cfg(not(feature = "no_std"))]
+    pub vars: HashMap<Ident<'src>, Value<'src>>,
+    #[cfg(feature = "no_std")]
+    pub vars: BTreeMap<Ident<'src>, Value<'src>>,
 }
 impl<'src> Scope<'src> {
     /// Create an emptycope Scope
     pub fn new() -> Scope<'src> {
         Scope {
-            funcs:        HashMap::new(),
+            #[cfg(not(feature = "no_std"))]
+            funcs: HashMap::new(),
+            #[cfg(not(feature = "no_std"))]
             native_funcs: HashMap::new(),
-            vars:         HashMap::new(),
+            #[cfg(not(feature = "no_std"))]
+            vars: HashMap::new(),
+            #[cfg(feature = "no_std")]
+            funcs: BTreeMap::new(),
+            #[cfg(feature = "no_std")]
+            native_funcs: BTreeMap::new(),
+            #[cfg(feature = "no_std")]
+            vars: BTreeMap::new(),
         }
     }
 
@@ -329,7 +358,10 @@ impl<'src> Evaluatable<'src> for Expr<'src> {
             Expr::BinOp(ref l, ref opc, ref r) => opc.eval(l.eval(scopes), r.eval(scopes)),
             Expr::Bool(x) => Value::Bool(x),
             Expr::Dict(ref items) => {
+                #[cfg(not(feature = "no_std"))]
                 let mut map = HashMap::<Ident, Value>::new();
+                #[cfg(feature = "no_std")]
+                let mut map = BTreeMap::<Ident, Value>::new();
                 for item in items.iter() {
                     map.insert(item.0, item.1.eval(scopes));
                 }

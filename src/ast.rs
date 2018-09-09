@@ -1,5 +1,17 @@
+#[cfg(not(feature = "no_std"))]
 use std::any::Any;
+#[cfg(feature = "no_std")]
+use core::any::Any;
+
+#[cfg(not(feature = "no_std"))]
 use std::collections::HashMap;
+#[cfg(feature = "no_std")]
+use alloc::collections::BTreeMap;
+
+#[cfg(feature = "no_std")]
+use alloc::boxed::Box;
+#[cfg(feature = "no_std")]
+use alloc::vec::Vec;
 
 use interpreter::ScopeChain;
 
@@ -98,7 +110,13 @@ pub type StmtBlock<'src> = Vec<Stmt<'src>>;
 #[derive(Clone, Debug, PartialEq)]
 pub enum Value<'src> {
     Bool(bool),
+
+    #[cfg(feature = "no_std")]
+    Dict(BTreeMap<Ident<'src>, Value<'src>>),
+
+    #[cfg(not(feature = "no_std"))]
     Dict(HashMap<Ident<'src>, Value<'src>>),
+
     Int(isize),
     List(Vec<Value<'src>>),
     None,

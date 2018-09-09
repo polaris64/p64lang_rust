@@ -1,4 +1,13 @@
+#[cfg(not(feature = "no_std"))]
 use std::ops::Neg;
+#[cfg(feature = "no_std")]
+use core::ops::Neg;
+
+#[cfg(feature = "no_std")]
+use alloc::boxed::Box;
+#[cfg(feature = "no_std")]
+use alloc::vec::Vec;
+
 use nom::{alpha, digit, digit0};
 use nom::types::CompleteStr;
 

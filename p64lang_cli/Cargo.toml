@@ -4,4 +4,4 @@ version = "0.1.0"
 authors = ["Simon Pugnet <simon@polaris64.net>"]
 
 [dependencies]
-p64lang = { path = "../" }
+p64lang = { path = "../", default-features = false, features = ["std"] }
