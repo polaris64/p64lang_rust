@@ -7,11 +7,11 @@ use interpreter::ScopeChain;
 
 /// Result of executing an Executable
 #[derive(Clone, Debug, PartialEq)]
-pub enum ExecResult {
+pub enum ExecResult<'src> {
     Break,
     Error(&'static str),
     None,
-    Return(Value),
+    Return(Value<'src>),
 }
 
 /// Language expression
@@ -19,19 +19,19 @@ pub enum ExecResult {
 /// Numbers, strings, lists, function calls, identifiers and operations thereon. Anything that can
 /// be evaluated to a Value.
 #[derive(Clone, Debug, PartialEq)]
-pub enum Expr {
-    BinOp(Box<Expr>, Opcode, Box<Expr>),
+pub enum Expr<'src> {
+    BinOp(Box<Expr<'src>>, Opcode, Box<Expr<'src>>),
     Bool(bool),
-    Dict(Vec<(Ident, Box<Expr>)>),
-    FuncCall(Ident, Vec<Box<Expr>>),
-    Id(Ident),
+    Dict(Vec<(Ident<'src>, Box<Expr<'src>>)>),
+    FuncCall(Ident<'src>, Vec<Box<Expr<'src>>>),
+    Id(Ident<'src>),
     Int(isize),
-    ListElement(Ident, Box<Expr>),
-    List(Vec<Box<Expr>>),
+    ListElement(Ident<'src>, Box<Expr<'src>>),
+    List(Vec<Box<Expr<'src>>>),
     None,
     Real(f64),
-    Str(String),
-    UnaryOp(Opcode, Box<Expr>),
+    Str(&'src str),
+    UnaryOp(Opcode, Box<Expr<'src>>),
 }
 
 /// Script-defined functions
@@ -39,15 +39,15 @@ pub enum Expr {
 /// Contains a list of statements (StmtBlock) that are executed when the Function is called, and a
 /// list of argument Idents that will be assigned to actual values during the call.
 #[derive(Debug)]
-pub struct Function {
-    pub args: Vec<Ident>,
-    pub stmts: StmtBlock,
+pub struct Function<'src> {
+    pub args:  Vec<Ident<'src>>,
+    pub stmts: StmtBlock<'src>,
 }
 
 /// Language identifier
 ///
 /// Used to represent a variable or function name.
-pub type Ident = String;
+pub type Ident<'src> = &'src str;
 
 /// Operation codes
 ///
@@ -77,45 +77,45 @@ pub enum Opcode {
 /// Any single program instruction, such as a variable assignment, function call, conditional,
 /// loop.
 #[derive(Clone, Debug, PartialEq)]
-pub enum Stmt {
+pub enum Stmt<'src> {
     Break,
-    Expr(Expr),
-    FnDef(Ident, Vec<Ident>, StmtBlock),
-    If(Expr, StmtBlock),
-    IfElse(Expr, StmtBlock, StmtBlock),
-    Let(Ident, Expr),
-    ListItemAssignment(Ident, Expr, Expr),
-    Loop(StmtBlock),
-    Return(Expr),
+    Expr(Expr<'src>),
+    FnDef(Ident<'src>, Vec<Ident<'src>>, StmtBlock<'src>),
+    If(Expr<'src>, StmtBlock<'src>),
+    IfElse(Expr<'src>, StmtBlock<'src>, StmtBlock<'src>),
+    Let(Ident<'src>, Expr<'src>),
+    ListItemAssignment(Ident<'src>, Expr<'src>, Expr<'src>),
+    Loop(StmtBlock<'src>),
+    Return(Expr<'src>),
 }
 
 /// Statement block
 ///
 /// A block of zero or more Stmts
-pub type StmtBlock = Vec<Stmt>;
+pub type StmtBlock<'src> = Vec<Stmt<'src>>;
 
 /// Result of evaluating an Evaluatable
 #[derive(Clone, Debug, PartialEq)]
-pub enum Value {
+pub enum Value<'src> {
     Bool(bool),
-    Dict(HashMap<Ident, Value>),
+    Dict(HashMap<Ident<'src>, Value<'src>>),
     Int(isize),
-    List(Vec<Value>),
+    List(Vec<Value<'src>>),
     None,
     Real(f64),
-    Str(String),
+    Str(&'src str),
 }
 
 // --- Traits ---
 
 /// Trait allowing various language elements to be evaluated
-pub trait Evaluatable {
-    fn eval(&self, scopes: &mut ScopeChain) -> Value;
+pub trait Evaluatable<'src> {
+    fn eval(&self, scopes: &mut ScopeChain<'src>) -> Value<'src>;
 }
 
 /// Trait allowing various language elements to be executed
-pub trait Executable {
-    fn exec(&self, scopes: &mut ScopeChain) -> ExecResult;
+pub trait Executable<'src> {
+    fn exec(&self, scopes: &mut ScopeChain<'src>) -> ExecResult<'src>;
 }
 
 /// Trait used to allow structs to be called from a script
@@ -123,6 +123,6 @@ pub trait Executable {
 /// The `execute()` method will be called via the script interpreter with the current ScopeChain
 /// and a list of argument values.
 pub trait NativeFunction {
-    fn execute(&self, scopes: &mut ScopeChain, args: &Vec<Value>) -> Value;
+    fn execute<'src>(&self, scopes: &mut ScopeChain<'src>, args: &Vec<Value<'src>>) -> Value<'src>;
     fn as_any(&self) -> &Any;
 }

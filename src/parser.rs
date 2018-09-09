@@ -74,7 +74,7 @@ fn is_ident_char(c: char) -> bool {
 named!(ident<CompleteStr, Ident>,
     map!(
         recognize!(pair!(alt!(alpha | tag!("_")), take_while!(is_ident_char))),
-        |s: CompleteStr| s.0.to_string()
+        |s: CompleteStr| s.0
     )
 );
 
@@ -232,7 +232,7 @@ named!(key_val_pair<CompleteStr, (Ident, Expr)>,
         key: str_literal >>
         ws!(tag!(":")) >>
         val: expr >>
-        ( (key.to_string(), val) )
+        ( (key, val) )
     )
 );
 
@@ -291,16 +291,16 @@ named!(unary_op<CompleteStr, Expr>,
 /// Parser for any language expression that results in a single value
 named!(value_expr<CompleteStr, Expr>,
     alt!(
-        map!(float_literal, |x: f64|   Expr::Real(x))            |
-        map!(int_literal,   |x: isize| Expr::Int(x))             |
-        map!(bool_literal,  |x: bool|  Expr::Bool(x))            |
-        map!(str_literal,   |x: &str|  Expr::Str(x.to_string())) |
-        map!(tag!("null"),  |_|        Expr::None)               |
-        func_call                                                |
-        dict_literal                                             |
-        list_literal                                             |
-        list_element                                             |
-        unary_op                                                 |
+        map!(float_literal, |x: f64|   Expr::Real(x)) |
+        map!(int_literal,   |x: isize| Expr::Int(x))  |
+        map!(bool_literal,  |x: bool|  Expr::Bool(x)) |
+        map!(str_literal,   |x: &str|  Expr::Str(x))  |
+        map!(tag!("null"),  |_|        Expr::None)    |
+        func_call                                     |
+        dict_literal                                  |
+        list_literal                                  |
+        list_element                                  |
+        unary_op                                      |
         map!(ident,         |x|        Expr::Id(x))
     )
 );
@@ -425,7 +425,7 @@ named!(program_parser<CompleteStr, StmtBlock>,
  * Main parser function: takes source code and returns a Result containing either the AST or a
  * string error.
  */
-pub fn parse(source: &str) -> Result<StmtBlock, &'static str> {
+pub fn parse<'s>(source: &'s str) -> Result<StmtBlock, &'static str> {
     // TODO: obtain error from Nom
     match program_parser(CompleteStr(source)) {
         Ok((_, stmts)) => Ok(stmts),
@@ -477,10 +477,10 @@ mod tests {
 
     #[test]
     fn ident_test_valid() {
-        assert_eq!(Ok((CompleteStr(""),   "abc123".to_string())), ident(CompleteStr("abc123")));
-        assert_eq!(Ok((CompleteStr(""),   "a".to_string())),      ident(CompleteStr("a")));
-        assert_eq!(Ok((CompleteStr(""),   "aa".to_string())),     ident(CompleteStr("aa")));
-        assert_eq!(Ok((CompleteStr(" a"), "a".to_string())),      ident(CompleteStr("a a")));
+        assert_eq!(Ok((CompleteStr(""),   "abc123")), ident(CompleteStr("abc123")));
+        assert_eq!(Ok((CompleteStr(""),   "a")),      ident(CompleteStr("a")));
+        assert_eq!(Ok((CompleteStr(""),   "aa")),     ident(CompleteStr("aa")));
+        assert_eq!(Ok((CompleteStr(" a"), "a")),      ident(CompleteStr("a a")));
     }
 
     #[test]
@@ -690,8 +690,8 @@ mod tests {
             Ok((
                 CompleteStr(""),
                 Expr::Dict(vec![
-                   ("a".to_string(),   Box::new(Expr::Int(1))),
-                   ("bcd".to_string(), Box::new(Expr::Real(23.45f64)))
+                   ("a",   Box::new(Expr::Int(1))),
+                   ("bcd", Box::new(Expr::Real(23.45f64)))
                 ])
             )),
             dict_literal(CompleteStr(r#"{"a":1,"bcd":23.45}"#))
@@ -709,7 +709,7 @@ mod tests {
             Ok((
                 CompleteStr(""),
                 Expr::FuncCall(
-                    "testFun".to_string(),
+                    "testFun",
                     vec![
                         Box::new(Expr::Int(1)),
                         Box::new(Expr::Int(2)),
@@ -730,13 +730,13 @@ mod tests {
 
     #[test]
     fn key_val_pair_valid() {
-        assert_eq!(Ok((CompleteStr(""), ("a".to_string(), Expr::Int(1)))), key_val_pair(CompleteStr(r#""a":1"#)));
-        assert_eq!(Ok((CompleteStr(""), ("a".to_string(), Expr::Int(1)))), key_val_pair(CompleteStr(r#""a" :1"#)));
-        assert_eq!(Ok((CompleteStr(""), ("a".to_string(), Expr::Int(1)))), key_val_pair(CompleteStr(r#""a": 1"#)));
-        assert_eq!(Ok((CompleteStr(""), ("a".to_string(), Expr::Int(1)))), key_val_pair(CompleteStr(r#""a" : 1"#)));
+        assert_eq!(Ok((CompleteStr(""), ("a", Expr::Int(1)))), key_val_pair(CompleteStr(r#""a":1"#)));
+        assert_eq!(Ok((CompleteStr(""), ("a", Expr::Int(1)))), key_val_pair(CompleteStr(r#""a" :1"#)));
+        assert_eq!(Ok((CompleteStr(""), ("a", Expr::Int(1)))), key_val_pair(CompleteStr(r#""a": 1"#)));
+        assert_eq!(Ok((CompleteStr(""), ("a", Expr::Int(1)))), key_val_pair(CompleteStr(r#""a" : 1"#)));
 
         assert_eq!(
-            Ok((CompleteStr(""), ("abc".to_string(), Expr::Str("def".to_string())))),
+            Ok((CompleteStr(""), ("abc", Expr::Str("def")))),
             key_val_pair(CompleteStr(r#""abc":"def""#))
         );
     }
@@ -744,7 +744,7 @@ mod tests {
     #[test]
     fn list_element_valid() {
         assert_eq!(
-            Ok((CompleteStr(""), Expr::ListElement("a".to_string(), Box::new(Expr::Int(1))))),
+            Ok((CompleteStr(""), Expr::ListElement("a", Box::new(Expr::Int(1))))),
             list_element(CompleteStr("a[1]"))
         );
     }
@@ -756,7 +756,7 @@ mod tests {
                 CompleteStr(""),
                 Expr::List(vec![
                    Box::new(Expr::Int(1)),
-                   Box::new(Expr::Str("two".to_string())),
+                   Box::new(Expr::Str("two")),
                    Box::new(Expr::Bool(true)),
                    Box::new(Expr::Real(4.56f64)),
                 ])
@@ -781,7 +781,7 @@ mod tests {
     #[test]
     fn unary_op_valid() {
         assert_eq!(
-            Ok((CompleteStr(""), Expr::UnaryOp(Opcode::Not, Box::new(Expr::Id("a".to_string()))))),
+            Ok((CompleteStr(""), Expr::UnaryOp(Opcode::Not, Box::new(Expr::Id("a"))))),
             unary_op(CompleteStr("!a"))
         );
         assert_eq!(
@@ -795,16 +795,16 @@ mod tests {
         assert_eq!(Ok((CompleteStr(""), Expr::Real(1.23f64))),          value_expr(CompleteStr("1.23")));
         assert_eq!(Ok((CompleteStr(""), Expr::Int(123))),               value_expr(CompleteStr("123")));
         assert_eq!(Ok((CompleteStr(""), Expr::Bool(true))),             value_expr(CompleteStr("true")));
-        assert_eq!(Ok((CompleteStr(""), Expr::Str("abc".to_string()))), value_expr(CompleteStr(r#""abc""#)));
+        assert_eq!(Ok((CompleteStr(""), Expr::Str("abc"))), value_expr(CompleteStr(r#""abc""#)));
         assert_eq!(Ok((CompleteStr(""), Expr::None)),                   value_expr(CompleteStr("null")));
-        assert_eq!(Ok((CompleteStr(""), Expr::Id("abc".to_string()))),  value_expr(CompleteStr("abc")));
+        assert_eq!(Ok((CompleteStr(""), Expr::Id("abc"))),  value_expr(CompleteStr("abc")));
 
         assert_eq!(
             Ok((
                 CompleteStr(""),
                 Expr::List(vec![
                    Box::new(Expr::Int(1)),
-                   Box::new(Expr::Str("two".to_string())),
+                   Box::new(Expr::Str("two")),
                    Box::new(Expr::Bool(true)),
                    Box::new(Expr::Real(4.56f64)),
                 ])
@@ -816,8 +816,8 @@ mod tests {
             Ok((
                 CompleteStr(""),
                 Expr::Dict(vec![
-                   ("a".to_string(),   Box::new(Expr::Int(1))),
-                   ("bcd".to_string(), Box::new(Expr::Real(23.45f64)))
+                   ("a",   Box::new(Expr::Int(1))),
+                   ("bcd", Box::new(Expr::Real(23.45f64)))
                 ])
             )),
             value_expr(CompleteStr(r#"{"a":1,"bcd":23.45}"#))
@@ -827,7 +827,7 @@ mod tests {
             Ok((
                 CompleteStr(""),
                 Expr::FuncCall(
-                    "testFun".to_string(),
+                    "testFun",
                     vec![
                         Box::new(Expr::Int(1)),
                         Box::new(Expr::Int(2)),
@@ -839,12 +839,12 @@ mod tests {
         );
 
         assert_eq!(
-            Ok((CompleteStr(""), Expr::ListElement("a".to_string(), Box::new(Expr::Int(1))))),
+            Ok((CompleteStr(""), Expr::ListElement("a", Box::new(Expr::Int(1))))),
             value_expr(CompleteStr("a[1]"))
         );
 
         assert_eq!(
-            Ok((CompleteStr(""), Expr::UnaryOp(Opcode::Not, Box::new(Expr::Id("a".to_string()))))),
+            Ok((CompleteStr(""), Expr::UnaryOp(Opcode::Not, Box::new(Expr::Id("a"))))),
             value_expr(CompleteStr("!a"))
         );
     }
@@ -862,7 +862,7 @@ mod tests {
     #[test]
     fn expr_statement_valid() {
         assert_eq!(
-            Ok((CompleteStr(""), Stmt::Expr(Expr::Id("a".to_string())))),
+            Ok((CompleteStr(""), Stmt::Expr(Expr::Id("a")))),
             expr_statement(CompleteStr("a"))
         );
     }
@@ -873,14 +873,14 @@ mod tests {
             Ok((
                 CompleteStr(""),
                 Stmt::FnDef(
-                    "abc".to_string(),
+                    "abc",
                     vec![
-                        "a".to_string(),
-                        "b".to_string(),
-                        "c".to_string(),
+                        "a",
+                        "b",
+                        "c",
                     ],
                     vec![
-                        Stmt::Return(Expr::Id("a".to_string())),
+                        Stmt::Return(Expr::Id("a")),
                     ]
                 )
             )),
@@ -898,7 +898,7 @@ mod tests {
                     vec![
                         Stmt::Expr(
                             Expr::FuncCall(
-                                "print".to_string(),
+                                "print",
                                 vec![Box::new(Expr::Int(1))],
                             ),
                         ),
@@ -919,7 +919,7 @@ mod tests {
                     vec![
                         Stmt::Expr(
                             Expr::FuncCall(
-                                "print".to_string(),
+                                "print",
                                 vec![Box::new(Expr::Int(1))],
                             ),
                         ),
@@ -927,7 +927,7 @@ mod tests {
                     vec![
                         Stmt::Expr(
                             Expr::FuncCall(
-                                "print".to_string(),
+                                "print",
                                 vec![Box::new(Expr::Int(0))],
                             ),
                         ),
@@ -941,7 +941,7 @@ mod tests {
     #[test]
     fn let_statement_valid() {
         assert_eq!(
-            Ok((CompleteStr(""), Stmt::Let("a".to_string(), Expr::Int(123)))),
+            Ok((CompleteStr(""), Stmt::Let("a", Expr::Int(123)))),
             let_statement(CompleteStr("let a = 123"))
         );
     }
@@ -952,7 +952,7 @@ mod tests {
             Ok((
                 CompleteStr(""),
                 Stmt::ListItemAssignment(
-                    "a".to_string(),
+                    "a",
                     Expr::Int(1),
                     Expr::Int(2)
                 )
@@ -963,8 +963,8 @@ mod tests {
             Ok((
                 CompleteStr(""),
                 Stmt::ListItemAssignment(
-                    "a".to_string(),
-                    Expr::Str("idx".to_string()),
+                    "a",
+                    Expr::Str("idx"),
                     Expr::Int(2)
                 )
             )),
@@ -981,7 +981,7 @@ mod tests {
                     vec![
                         Stmt::Expr(
                             Expr::FuncCall(
-                                "print".to_string(),
+                                "print",
                                 vec![Box::new(Expr::Int(1))]
                             )
                         ),

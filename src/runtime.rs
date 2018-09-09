@@ -14,12 +14,12 @@ impl NativeFunction for NFPrint {
     /// Execute the "print" NativeFunction
     ///
     /// Prints all arguments in turn to stdout.
-    fn execute(&self, _scopes: &mut ScopeChain, args: &Vec<Value>) -> Value {
+    fn execute<'src>(&self, _scopes: &mut ScopeChain<'src>, args: &Vec<Value<'src>>) -> Value<'src> {
         for arg in args {
             match arg {
-                Value::Int(x) => print!("{}", x),
+                Value::Int(x)  => print!("{}", x),
                 Value::Real(x) => print!("{}", x),
-                Value::Str(x) => print!("{}", x),
+                Value::Str(x)  => print!("{}", x),
                 _ => print!("{:?}", arg),
             };
         }
@@ -34,12 +34,12 @@ impl NativeFunction for NFPrintLn {
     /// Execute the "println" NativeFunction
     ///
     /// Prints all arguments in turn to stdout, followed by a newline.
-    fn execute(&self, _scopes: &mut ScopeChain, args: &Vec<Value>) -> Value {
+    fn execute<'src>(&self, _scopes: &mut ScopeChain<'src>, args: &Vec<Value<'src>>) -> Value<'src> {
         for arg in args {
             match arg {
-                Value::Int(x) => print!("{}", x),
+                Value::Int(x)  => print!("{}", x),
                 Value::Real(x) => print!("{}", x),
-                Value::Str(x) => print!("{}", x),
+                Value::Str(x)  => print!("{}", x),
                 _ => println!("{:?}", arg),
             };
         }
@@ -57,8 +57,8 @@ impl NativeFunction for NFPrintLn {
 pub fn insert_native_functions(scope: &mut Scope) {
     scope
         .native_funcs
-        .insert("print".to_string(), Rc::new(NFPrint {}));
+        .insert("print", Rc::new(NFPrint {}));
     scope
         .native_funcs
-        .insert("println".to_string(), Rc::new(NFPrintLn {}));
+        .insert("println", Rc::new(NFPrintLn {}));
 }

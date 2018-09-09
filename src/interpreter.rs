@@ -10,27 +10,29 @@ use ast::{
 ///
 /// Contains HashMaps mapping Idents to Functions, NativeFunctions and Values (variables) in the
 /// scope
-pub struct Scope {
-    pub funcs: HashMap<Ident, Rc<Function>>,
-    pub native_funcs: HashMap<Ident, Rc<NativeFunction>>,
-    pub vars: HashMap<Ident, Value>,
+pub struct Scope<'src> {
+    pub funcs:        HashMap<Ident<'src>, Rc<Function<'src>>>,
+    pub native_funcs: HashMap<Ident<'src>, Rc<NativeFunction>>,
+
+    // TODO: vars: HashMap<Ident, &Value> to avoid clone?
+    pub vars:         HashMap<Ident<'src>, Value<'src>>,
 }
-impl Scope {
-    /// Create an empty Scope
-    pub fn new() -> Scope {
+impl<'src> Scope<'src> {
+    /// Create an emptycope Scope
+    pub fn new() -> Scope<'src> {
         Scope {
-            funcs: HashMap::new(),
+            funcs:        HashMap::new(),
             native_funcs: HashMap::new(),
-            vars: HashMap::new(),
+            vars:         HashMap::new(),
         }
     }
 
     /// When creating a Scope for a Function invocation, inserts variables for each of the
     /// Function's arguments with the values passed to the invocation.
-    pub fn from_args(args: &Vec<(&Ident, &Value)>) -> Scope {
+    pub fn from_args(args: &Vec<(&Ident<'src>, &Value<'src>)>) -> Scope<'src> {
         let mut scope = Scope::new();
         for arg in args {
-            scope.vars.insert(arg.0.clone(), arg.1.clone());
+            scope.vars.insert(arg.0, arg.1.clone());
         }
         scope
     }
@@ -42,46 +44,46 @@ impl Scope {
 ///   - Contains methods to resolve variables, Functions, etc and to modify Scope items.
 ///   - Each function call pushes a new Scope onto the current ScopeChain.
 ///   - All evaluations/executions require a ScopeChain.
-pub struct ScopeChain {
-    scopes: Vec<Scope>,
+pub struct ScopeChain<'src> {
+    scopes: Vec<Scope<'src>>,
 }
-impl ScopeChain {
+impl<'src> ScopeChain<'src> {
     /// Creates an empty ScopeChain
-    pub fn new() -> ScopeChain {
+    pub fn new() -> ScopeChain<'src> {
         ScopeChain { scopes: vec![] }
     }
 
     /// Creates a new ScopeChain with a single root Scope
-    pub fn from_scope(scope: Scope) -> ScopeChain {
+    pub fn from_scope(scope: Scope<'src>) -> ScopeChain<'src> {
         ScopeChain {
             scopes: vec![scope],
         }
     }
 
     /// Pushes a new Scope onto the stack
-    pub fn push(&mut self, scope: Scope) {
+    pub fn push(&mut self, scope: Scope<'src>) {
         self.scopes.push(scope);
     }
 
     /// Pops the last Scope from the stack
-    pub fn pop(&mut self) -> Option<Scope> {
+    pub fn pop(&mut self) -> Option<Scope<'src>> {
         self.scopes.pop()
     }
 
     /// Inserts a Function into the last Scope with the Ident `key`
-    pub fn insert_func(&mut self, key: &str, val: Function) {
+    pub fn insert_func(&mut self, key: &'src str, val: Function<'src>) {
         match self.scopes.last_mut() {
-            Some(ref mut scope) => scope.funcs.insert(key.clone().to_string(), Rc::new(val)),
+            Some(ref mut scope) => scope.funcs.insert(key, Rc::new(val)),
             _ => None,
         };
     }
 
     /// Inserts a Value `val` into the dict identified by `key` at index `idx`
-    pub fn insert_dict_item(&mut self, key: &str, idx: &str, val: Value) {
+    pub fn insert_dict_item(&mut self, key: &'src str, idx: &'src str, val: Value<'src>) {
         for scope in self.scopes.iter_mut().rev() {
             if let Some(ref mut scope_val) = scope.vars.get_mut(key) {
                 if let Value::Dict(ref mut dict) = scope_val {
-                    dict.insert(idx.to_string(), val);
+                    dict.insert(idx, val);
                     break;
                 }
             }
@@ -89,7 +91,7 @@ impl ScopeChain {
     }
 
     /// Inserts a Value `val` into the list identified by `key` at index `idx`
-    pub fn insert_list_item(&mut self, key: &str, idx: usize, val: Value) {
+    pub fn insert_list_item(&mut self, key: &'src str, idx: usize, val: Value<'src>) {
         for scope in self.scopes.iter_mut().rev() {
             if let Some(ref mut scope_val) = scope.vars.get_mut(key) {
                 if let Value::List(ref mut lst) = scope_val {
@@ -104,16 +106,16 @@ impl ScopeChain {
     }
 
     /// Inserts or updates a Value for a variable identified by `key`
-    pub fn insert_var(&mut self, key: &str, val: Value) {
+    pub fn insert_var(&mut self, key: &'src str, val: Value<'src>) {
         match self.scopes.last_mut() {
-            Some(ref mut scope) => scope.vars.insert(key.clone().to_string(), val),
+            Some(ref mut scope) => scope.vars.insert(key, val),
             _ => None,
         };
     }
 
     /// Searches from last to first Scope for a Function identified by `key` and returns a
     /// reference
-    pub fn resolve_func(&self, key: &str) -> Option<Rc<Function>> {
+    pub fn resolve_func(&self, key: &'src str) -> Option<Rc<Function<'src>>> {
         for scope in self.scopes.iter().rev() {
             match scope.funcs.get(key) {
                 Some(x) => return Some(Rc::clone(x)),
@@ -125,7 +127,7 @@ impl ScopeChain {
 
     /// Searches from last to first Scope for a NativeFunction identified by `key` and returns a
     /// reference
-    pub fn resolve_native_func(&self, key: &str) -> Option<Rc<NativeFunction>> {
+    pub fn resolve_native_func(&self, key: &'src str) -> Option<Rc<NativeFunction>> {
         for scope in self.scopes.iter().rev() {
             match scope.native_funcs.get(key) {
                 Some(x) => return Some(Rc::clone(x)),
@@ -137,7 +139,7 @@ impl ScopeChain {
 
     /// Searches from last to first Scope for a variable identified by `key` and returns a
     /// reference to its Value
-    pub fn resolve_var(&self, key: &str) -> Option<&Value> {
+    pub fn resolve_var(&self, key: &'src str) -> Option<&Value<'src>> {
         for scope in self.scopes.iter().rev() {
             match scope.vars.get(key) {
                 Some(ref x) => return Some(x),
@@ -173,19 +175,19 @@ impl Opcode {
     }
 
     /// Evaluates the Opcode given left and right operands according to the operand types
-    fn eval(&self, l: Value, r: Value) -> Value {
+    fn eval<'src>(&self, l: Value<'src>, r: Value<'src>) -> Value<'src> {
         match *self {
             Opcode::Add | Opcode::Mul | Opcode::Sub => match (l, r) {
-                (Value::Int(l), Value::Int(r)) => Value::Int(self.calc_i(l, r)),
-                (Value::Int(l), Value::Real(r)) => Value::Real(self.calc_f(l as f64, r)),
-                (Value::Real(l), Value::Int(r)) => Value::Real(self.calc_f(l, r as f64)),
+                (Value::Int(l),  Value::Int(r))  => Value::Int(self.calc_i(l, r)),
+                (Value::Int(l),  Value::Real(r)) => Value::Real(self.calc_f(l as f64, r)),
+                (Value::Real(l), Value::Int(r))  => Value::Real(self.calc_f(l, r as f64)),
                 (Value::Real(l), Value::Real(r)) => Value::Real(self.calc_f(l, r)),
                 (_, _) => Value::None,
             },
             Opcode::Div => match (l, r) {
-                (Value::Int(l), Value::Int(r)) => Value::Real(self.calc_f(l as f64, r as f64)),
-                (Value::Int(l), Value::Real(r)) => Value::Real(self.calc_f(l as f64, r)),
-                (Value::Real(l), Value::Int(r)) => Value::Real(self.calc_f(l, r as f64)),
+                (Value::Int(l),  Value::Int(r))  => Value::Real(self.calc_f(l as f64, r as f64)),
+                (Value::Int(l),  Value::Real(r)) => Value::Real(self.calc_f(l as f64, r)),
+                (Value::Real(l), Value::Int(r))  => Value::Real(self.calc_f(l, r as f64)),
                 (Value::Real(l), Value::Real(r)) => Value::Real(self.calc_f(l, r)),
                 (_, _) => Value::None,
             },
@@ -208,11 +210,11 @@ impl Opcode {
     }
 
     /// Evaluates the unary Opcode given Value of the operand
-    fn eval_unary(&self, x: Value) -> Value {
+    fn eval_unary<'src>(&self, x: Value<'src>) -> Value<'src> {
         match *self {
             Opcode::Not => match x {
                 Value::Bool(x) => Value::Bool(!x),
-                Value::None => Value::Bool(true),
+                Value::None    => Value::Bool(true),
                 _ => Value::Bool(false),
             },
             _ => Value::None,
@@ -220,54 +222,54 @@ impl Opcode {
     }
 
     /// Calculates an Opcode's logical result given left and right operands
-    fn logical(&self, l: Value, r: Value) -> Value {
+    fn logical<'src>(&self, l: Value<'src>, r: Value<'src>) -> Value<'src> {
         match *self {
             Opcode::Equal => match (l, r) {
-                (Value::Int(l), Value::Int(r)) => Value::Bool(l == r),
-                (Value::Int(l), Value::Real(r)) => Value::Bool(l as f64 == r),
-                (Value::Real(l), Value::Int(r)) => Value::Bool(l == r as f64),
+                (Value::Int(l),  Value::Int(r))  => Value::Bool(l == r),
+                (Value::Int(l),  Value::Real(r)) => Value::Bool(l as f64 == r),
+                (Value::Real(l), Value::Int(r))  => Value::Bool(l == r as f64),
                 (Value::Real(l), Value::Real(r)) => Value::Bool(l == r),
-                (Value::Str(l), Value::Str(r)) => Value::Bool(l == r),
+                (Value::Str(l),  Value::Str(r))  => Value::Bool(l == r),
                 (_, _) => Value::None,
             },
             Opcode::NotEqual => match (l, r) {
-                (Value::Int(l), Value::Int(r)) => Value::Bool(l != r),
-                (Value::Int(l), Value::Real(r)) => Value::Bool(l as f64 != r),
-                (Value::Real(l), Value::Int(r)) => Value::Bool(l != r as f64),
+                (Value::Int(l),  Value::Int(r))  => Value::Bool(l != r),
+                (Value::Int(l),  Value::Real(r)) => Value::Bool(l as f64 != r),
+                (Value::Real(l), Value::Int(r))  => Value::Bool(l != r as f64),
                 (Value::Real(l), Value::Real(r)) => Value::Bool(l != r),
-                (Value::Str(l), Value::Str(r)) => Value::Bool(l != r),
+                (Value::Str(l),  Value::Str(r))  => Value::Bool(l != r),
                 (_, _) => Value::None,
             },
             Opcode::LessThan => match (l, r) {
-                (Value::Int(l), Value::Int(r)) => Value::Bool(l < r),
-                (Value::Int(l), Value::Real(r)) => Value::Bool((l as f64) < r),
-                (Value::Real(l), Value::Int(r)) => Value::Bool(l < r as f64),
+                (Value::Int(l),  Value::Int(r))  => Value::Bool(l < r),
+                (Value::Int(l),  Value::Real(r)) => Value::Bool((l as f64) < r),
+                (Value::Real(l), Value::Int(r))  => Value::Bool(l < r as f64),
                 (Value::Real(l), Value::Real(r)) => Value::Bool(l < r),
-                (Value::Str(l), Value::Str(r)) => Value::Bool(l < r),
+                (Value::Str(l),  Value::Str(r))  => Value::Bool(l < r),
                 (_, _) => Value::None,
             },
             Opcode::GreaterThan => match (l, r) {
-                (Value::Int(l), Value::Int(r)) => Value::Bool(l > r),
-                (Value::Int(l), Value::Real(r)) => Value::Bool(l as f64 > r),
-                (Value::Real(l), Value::Int(r)) => Value::Bool(l > r as f64),
+                (Value::Int(l),  Value::Int(r))  => Value::Bool(l > r),
+                (Value::Int(l),  Value::Real(r)) => Value::Bool(l as f64 > r),
+                (Value::Real(l), Value::Int(r))  => Value::Bool(l > r as f64),
                 (Value::Real(l), Value::Real(r)) => Value::Bool(l > r),
-                (Value::Str(l), Value::Str(r)) => Value::Bool(l > r),
+                (Value::Str(l),  Value::Str(r))  => Value::Bool(l > r),
                 (_, _) => Value::None,
             },
             Opcode::LessThanOrEqual => match (l, r) {
-                (Value::Int(l), Value::Int(r)) => Value::Bool(l <= r),
-                (Value::Int(l), Value::Real(r)) => Value::Bool(l as f64 <= r),
-                (Value::Real(l), Value::Int(r)) => Value::Bool(l <= r as f64),
+                (Value::Int(l),  Value::Int(r))  => Value::Bool(l <= r),
+                (Value::Int(l),  Value::Real(r)) => Value::Bool(l as f64 <= r),
+                (Value::Real(l), Value::Int(r))  => Value::Bool(l <= r as f64),
                 (Value::Real(l), Value::Real(r)) => Value::Bool(l <= r),
-                (Value::Str(l), Value::Str(r)) => Value::Bool(l <= r),
+                (Value::Str(l),  Value::Str(r))  => Value::Bool(l <= r),
                 (_, _) => Value::None,
             },
             Opcode::GreaterThanOrEqual => match (l, r) {
-                (Value::Int(l), Value::Int(r)) => Value::Bool(l >= r),
-                (Value::Int(l), Value::Real(r)) => Value::Bool(l as f64 >= r),
-                (Value::Real(l), Value::Int(r)) => Value::Bool(l >= r as f64),
+                (Value::Int(l),  Value::Int(r))  => Value::Bool(l >= r),
+                (Value::Int(l),  Value::Real(r)) => Value::Bool(l as f64 >= r),
+                (Value::Real(l), Value::Int(r))  => Value::Bool(l >= r as f64),
                 (Value::Real(l), Value::Real(r)) => Value::Bool(l >= r),
-                (Value::Str(l), Value::Str(r)) => Value::Bool(l >= r),
+                (Value::Str(l),  Value::Str(r))  => Value::Bool(l >= r),
                 (_, _) => Value::None,
             },
             Opcode::LogicalAnd => match (l, r) {
@@ -287,14 +289,14 @@ impl Opcode {
     }
 }
 
-impl Function {
+impl<'src> Function<'src> {
     /// Executes the Function
     ///
     ///   - Creates a new Function Scope
     ///   - Executes the Function's statements (StmtBlock)
     ///   - Removes the Function's Scope
     ///   - Returns the Function result Value
-    pub fn execute(&self, scopes: &mut ScopeChain, args: &Vec<Value>) -> Value {
+    pub fn execute(&self, scopes: &mut ScopeChain<'src>, args: &Vec<Value<'src>>) -> Value<'src> {
         // Create local scope
         let scope = Scope::from_args(
             &self
@@ -320,22 +322,21 @@ impl Function {
     }
 }
 
-impl Evaluatable for Expr {
+impl<'src> Evaluatable<'src> for Expr<'src> {
     /// Evaluate an Expr
-    fn eval(&self, scopes: &mut ScopeChain) -> Value {
+    fn eval(&self, scopes: &mut ScopeChain<'src>) -> Value<'src> {
         match *self {
             Expr::BinOp(ref l, ref opc, ref r) => opc.eval(l.eval(scopes), r.eval(scopes)),
             Expr::Bool(x) => Value::Bool(x),
             Expr::Dict(ref items) => {
                 let mut map = HashMap::<Ident, Value>::new();
                 for item in items.iter() {
-                    map.insert(item.0.clone(), item.1.eval(scopes));
+                    map.insert(item.0, item.1.eval(scopes));
                 }
                 Value::Dict(map)
             },
             Expr::FuncCall(ref func_id, ref args) => {
-                let eval_args = args.iter().map(|x| x.eval(scopes)).collect::<Vec<Value>>();
-
+                let mut eval_args = args.iter().map(|x| x.eval(scopes)).collect::<Vec<Value<'src>>>();
                 match scopes.resolve_func(func_id) {
                     Some(f) => f.execute(scopes, &eval_args),
                     None => match scopes.resolve_native_func(func_id) {
@@ -345,12 +346,20 @@ impl Evaluatable for Expr {
                 }
             }
             Expr::Id(ref x) => match scopes.resolve_var(x) {
+
+                // TODO: remove clone() requirement
                 Some(x) => x.clone(),
+
                 None => Value::None,
             },
             Expr::Int(x) => Value::Int(x),
             Expr::List(ref exprs) => {
-                Value::List(exprs.iter().map(|x| x.eval(scopes)).collect::<Vec<Value>>())
+                Value::List(
+                    exprs
+                        .iter()
+                        .map(|x| x.eval(scopes))
+                        .collect::<Vec<Value<'src>>>()
+                )
             }
             Expr::ListElement(ref id, ref expr) => {
                 
@@ -384,17 +393,17 @@ impl Evaluatable for Expr {
                     None => Value::None,
                 }
             }
-            Expr::None => Value::None,
+            Expr::None    => Value::None,
             Expr::Real(x) => Value::Real(x),
-            Expr::Str(ref x) => Value::Str(x.to_string()),
+            Expr::Str(x)  => Value::Str(x),
             Expr::UnaryOp(ref opc, ref x) => opc.eval_unary(x.eval(scopes)),
         }
     }
 }
 
-impl Executable for Stmt {
+impl<'src> Executable<'src> for Stmt<'src> {
     /// Execute a Stmt
-    fn exec(&self, scopes: &mut ScopeChain) -> ExecResult {
+    fn exec(&self, scopes: &mut ScopeChain<'src>) -> ExecResult<'src> {
         match *self {
             // Break from a loop
             Stmt::Break => ExecResult::Break,
@@ -410,7 +419,7 @@ impl Executable for Stmt {
                 scopes.insert_func(
                     fn_id,
                     Function {
-                        args: arg_ids.clone(),
+                        args:  arg_ids.clone(),
                         stmts: stmts.clone(),
                     },
                 );
@@ -477,17 +486,16 @@ impl Executable for Stmt {
     }
 }
 
-impl Executable for StmtBlock {
+impl<'src> Executable<'src> for StmtBlock<'src> {
     /// Execute StmtBlock: execute all Stmts in turn, stopping prematurely if an ExecResult::Break
     /// or ExecResult::Return is encountered.
-    fn exec(&self, scopes: &mut ScopeChain) -> ExecResult {
+    fn exec(&self, scopes: &mut ScopeChain<'src>) -> ExecResult<'src> {
         for stmt in self {
             let res = stmt.exec(scopes);
-            if let ExecResult::Return(_) = res {
-                return res;
-            }
-            if let ExecResult::Break = res {
-                return ExecResult::Break;
+            match res {
+                ExecResult::Return(_) => { return res; },
+                ExecResult::Break     => { return ExecResult::Break },
+                _ => {},
             }
         }
         ExecResult::None

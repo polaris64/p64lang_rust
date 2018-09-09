@@ -15,13 +15,13 @@ use runtime::insert_native_functions;
 ///
 ///   - `exec_result`: actual resulting value from execution
 ///   - `scope_chain`: ScopeChain after execution
-pub struct InterpretResult {
-    pub exec_result: ExecResult,
-    pub scope_chain: ScopeChain,
+pub struct InterpretResult<'src> {
+    pub exec_result: ExecResult<'src>,
+    pub scope_chain: ScopeChain<'src>,
 }
 
 /// Gets a Scope containing the runtime module's default NativeFunctions
-pub fn get_default_global_scope() -> Scope {
+pub fn get_default_global_scope<'src>() -> Scope<'src> {
     let mut scope = Scope::new();
     insert_native_functions(&mut scope);
     scope
@@ -34,13 +34,14 @@ pub fn get_default_global_scope() -> Scope {
 ///   - `src: &str`: source code to parse and execute
 ///   - `global_scope: Scope`: root scope under which to execute the code
 ///
-pub fn interpret(src: &str, global_scope: Scope) -> InterpretResult {
+pub fn interpret<'src>(src: &'src str, global_scope: Scope<'src>) -> InterpretResult<'src> {
     let mut scopes = ScopeChain::from_scope(global_scope);
+    let er = match parse(src) {
+        Ok(stmts) => stmts.exec(&mut scopes),
+        Err(s)    => ExecResult::Error(s),
+    };
     InterpretResult {
-        exec_result: match parse(src) {
-            Ok(stmts) => stmts.exec(&mut scopes),
-            Err(s)    => ExecResult::Error(s),
-        },
+        exec_result: er,
         scope_chain: scopes,
     }
 }
@@ -70,7 +71,7 @@ mod tests {
         }
     }
     impl NativeFunction for TestPrint {
-        fn execute(&self, _scopes: &mut ScopeChain, _args: &Vec<Value>) -> Value {
+        fn execute<'src>(&self, _scopes: &mut ScopeChain<'src>, _args: &Vec<Value<'src>>) -> Value<'src> {
             self.calls.replace(self.get_calls() + 1);
             Value::None
         }
@@ -90,7 +91,7 @@ mod tests {
         }
     }
     impl NativeFunction for TestPrintLn {
-        fn execute(&self, _scopes: &mut ScopeChain, _args: &Vec<Value>) -> Value {
+        fn execute<'src>(&self, _scopes: &mut ScopeChain<'src>, _args: &Vec<Value<'src>>) -> Value<'src> {
             self.calls.replace(self.get_calls() + 1);
             Value::None
         }
@@ -106,10 +107,8 @@ mod tests {
         let test_println = Rc::new(TestPrintLn {
             calls: RefCell::new(0),
         });
-        scope.native_funcs.insert("print".to_string(), test_print);
-        scope
-            .native_funcs
-            .insert("println".to_string(), test_println);
+        scope.native_funcs.insert("print",   test_print);
+        scope.native_funcs.insert("println", test_println);
     }
 
     #[test]
@@ -119,7 +118,7 @@ mod tests {
         assert_eq!(
             Ok(vec![
                 Stmt::Let(
-                    "a".to_string(),
+                    "a",
                     Expr::BinOp(Box::new(Expr::Int(1)), Opcode::Add, Box::new(Expr::Int(2)))
                 )
             ]),
@@ -200,15 +199,15 @@ mod tests {
 
         // Strings
         assert_eq!(
-            ExecResult::Return(Value::Str("Hello".to_string())),
+            ExecResult::Return(Value::Str("Hello")),
             interpret(r#"return "Hello";"#, Scope::new()).exec_result
         );
         assert_eq!(
-            ExecResult::Return(Value::Str("Hello world!".to_string())),
+            ExecResult::Return(Value::Str("Hello world!")),
             interpret(r#"return "Hello world!";"#, Scope::new()).exec_result
         );
         assert_eq!(
-            ExecResult::Return(Value::Str("Hello'world!".to_string())),
+            ExecResult::Return(Value::Str("Hello'world!")),
             interpret(r#"return "Hello'world!";"#, Scope::new()).exec_result
         );
         // TODO: escaped " in Strings
@@ -216,19 +215,19 @@ mod tests {
 
         // Ids
         assert_eq!(
-            Ok(vec![Stmt::Expr(Expr::Id("a".to_string()))]),
+            Ok(vec![Stmt::Expr(Expr::Id("a"))]),
             parse("a")
         );
         assert_eq!(
-            Ok(vec![Stmt::Expr(Expr::Id("_a".to_string()))]),
+            Ok(vec![Stmt::Expr(Expr::Id("_a"))]),
             parse("_a")
         );
         assert_eq!(
-            Ok(vec![Stmt::Expr(Expr::Id("a123".to_string()))]),
+            Ok(vec![Stmt::Expr(Expr::Id("a123"))]),
             parse("a123")
         );
         assert_eq!(
-            Ok(vec![Stmt::Expr(Expr::Id("a123_45".to_string()))]),
+            Ok(vec![Stmt::Expr(Expr::Id("a123_45"))]),
             parse("a123_45")
         );
     }
@@ -510,7 +509,7 @@ mod tests {
     fn native_functions() {
         struct TestFunc {};
         impl NativeFunction for TestFunc {
-            fn execute(&self, _scopes: &mut ScopeChain, args: &Vec<Value>) -> Value {
+            fn execute<'src>(&self, _scopes: &mut ScopeChain<'src>, args: &Vec<Value<'src>>) -> Value<'src> {
                 match args[0] {
                     Value::Int(x) => Value::Int(x + 40),
                     _ => Value::None,
@@ -524,7 +523,7 @@ mod tests {
         let mut scope = Scope::new();
         scope
             .native_funcs
-            .insert("test_func".to_string(), Rc::new(test_func));
+            .insert("test_func", Rc::new(test_func));
 
         let scopes = interpret("let a = test_func(1) + 1; let b = test_func(12) * 3;", scope).scope_chain;
         assert_eq!(Some(&Value::Int(42)),  scopes.resolve_var("a"));
@@ -537,13 +536,13 @@ mod tests {
         assert_eq!(
             Some(&Value::List(vec![
                 Value::Int(1),
-                Value::Str("test".to_string()),
+                Value::Str("test"),
                 Value::Int(2)
             ])),
             scopes.resolve_var("a")
         );
         assert_eq!(
-            Some(&Value::Str("test".to_string())),
+            Some(&Value::Str("test")),
             scopes.resolve_var("b")
         );
 
@@ -554,17 +553,17 @@ mod tests {
         assert_eq!(
             Some(&Value::List(vec![
                 Value::Int(42),
-                Value::Str("test".to_string()),
+                Value::Str("test"),
                 Value::Int(2),
                 Value::None,
-                Value::Str("test2".to_string()),
+                Value::Str("test2"),
             ])),
             scopes.resolve_var("a")
         );
         assert_eq!(Some(&Value::Int(42)), scopes.resolve_var("b"));
         assert_eq!(Some(&Value::None),    scopes.resolve_var("c"));
         assert_eq!(
-            Some(&Value::Str("test2".to_string())),
+            Some(&Value::Str("test2")),
             scopes.resolve_var("d")
         );
     }
@@ -576,9 +575,9 @@ mod tests {
             Scope::new()
         ).scope_chain;
         let mut expected = HashMap::<Ident, Value>::new();
-        expected.insert("d1".to_string(), Value::Int(3));
-        expected.insert("d2".to_string(), Value::Str("third".to_string()));
-        expected.insert("d3".to_string(), Value::Str("fourth".to_string()));
+        expected.insert("d1", Value::Int(3));
+        expected.insert("d2", Value::Str("third"));
+        expected.insert("d3", Value::Str("fourth"));
         assert_eq!(&Value::Dict(expected), scopes.resolve_var("a").unwrap());
         assert_eq!(Some(&Value::Int(3)),   scopes.resolve_var("b"));
     }
