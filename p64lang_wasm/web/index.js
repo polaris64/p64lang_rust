@@ -85,4 +85,7 @@ loop {\n\
   if counter > 28 { break; };\n\
 }';
   });
+
+}).catch((err) => {
+  console.error('Unable to load WASM module:', err);
 });

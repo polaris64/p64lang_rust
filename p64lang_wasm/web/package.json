@@ -4,6 +4,7 @@
   "description": "",
   "main": "index.js",
   "scripts": {
+    "build": "webpack --config webpack.prod.js && cp index.html dist/",
     "serve": "webpack-dev-server"
   },
   "author": "",
@@ -11,6 +12,7 @@
   "devDependencies": {
     "webpack": "^4.0.1",
     "webpack-cli": "^2.0.10",
-    "webpack-dev-server": "^3.1.0"
+    "webpack-dev-server": "^3.1.0",
+    "webpack-merge": "^4.1.4"
   }
 }
