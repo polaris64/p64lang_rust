@@ -8,31 +8,69 @@
     <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.1.3/js/bootstrap.min.js" integrity="sha384-ChfqqxuZUCnJSK3+MXmPNIyE6ZbWh2IMqE241rYiqJxyMiZ6OW/JmZQ5stwEULTy" crossorigin="anonymous"></script>
     <style>
       #txt_source {
-        width: 100%;
         height: 12em;
         font-family: monospace;
       }
+      #exec_time {
+        font-size: 0.8em;
+        color: #888;
+      }
     </style>
+    <title>P64Lang WASM</title>
   </head>
   <body>
     <div class="container">
+
+      <div class="row">
+        <div class="col">
+          <div class="card">
+            <div class="card-body">
+              <h2 class="card-title">P64Lang WASM</h2>
+              <p class="lead">
+                This page demonstrates the
+                <a href="https://github.com/polaris64/p64lang_rust" target="blank">P64Lang</a>
+                parser and interpreter running as a WASM module.
+              </p>
+              <p>
+                Enter some code in the &quot;Script Source&quot; text box then
+                click &quot;Run!&quot; to parse and, if successful, execute the
+                script.  The results will be displayed in the &quot;Output&quot;
+                panel.
+              </p>
+              <a href="/" class="btn btn-secondary">Back to site</a>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <hr />
+
+      <div class="row">
+        <div class="col" id="errors"></div>
+      </div>
+
       <div class="row">
         <div class="col-8">
           <h3>Script source</h3>
-          <textarea id="txt_source">let i = 0;
+          <form>
+            <div class="form-group">
+              <textarea id="txt_source" class="form-control">let i = 0;
 loop {
   if i > 10 { break; };
   println("i is now ", i);
   let i = i + 1;
 };
 return i;</textarea>
+              <span id="exec_time"></span>
+            </div>
+          </form>
         </div>
         <div class="col">
           <h3>Actions</h3>
           <div class="row">
             <div class="btn-group">
               <button id="btn_run" type="button" class="btn btn-primary">Run!</button>
-              <button id="btn_clr" type="button" class="btn btn-secondary">Clear</button>
+              <button id="btn_clr" type="button" class="btn btn-secondary">Clear output</button>
             </div>
           </div>
           <hr />
@@ -49,7 +87,11 @@ return i;</textarea>
       <div class="row">
         <div class="col">
           <h3>Output</h3>
-          <pre id="stdout"></pre>
+          <div class="card">
+            <div class="card-body">
+              <pre id="stdout"></pre>
+            </div>
+          </div>
         </div>
       </div>
     </div>

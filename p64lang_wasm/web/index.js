@@ -8,6 +8,19 @@ function get_stdout() {
   return document.getElementById('stdout');
 }
 
+function set_exec_time(ms) {
+  document.getElementById('exec_time').innerText = `Execution time: ${ms}ms`;
+}
+
+function display_error(msg) {
+  const container = document.getElementById('errors');
+  const div = document.createElement('div');
+  div.classList.toggle('alert');
+  div.classList.toggle('alert-danger');
+  div.innerText = `ERROR: ${msg}`;
+  container.appendChild(div);
+}
+
 export function js_print(s, nl) {
   const div_stdout = get_stdout();
   div_stdout.innerHTML = div_stdout.innerHTML + s + (nl ? "<br />" : '');
@@ -19,7 +32,11 @@ js.then((js) => {
   const btn_clr = document.getElementById('btn_clr');
 
   btn_run.addEventListener('click', () => {
-    js_print(js.interpret_str(get_source().value), true);
+    const t0 = performance.now();
+    const s = js.interpret_str(get_source().value);
+    const t1 = performance.now();
+    js_print(s, true);
+    set_exec_time(t1 - t0);
   });
 
   btn_clr.addEventListener('click', () => {
@@ -87,5 +104,5 @@ loop {\n\
   });
 
 }).catch((err) => {
-  console.error('Unable to load WASM module:', err);
+  display_error(`Unable to load WASM module: ${err.toString()}`);
 });
