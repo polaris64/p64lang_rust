@@ -1,8 +1,17 @@
+#![no_std]
+
+#![feature(alloc)]
+#[macro_use]
+extern crate alloc;
+
 extern crate p64lang;
 extern crate wasm_bindgen;
 
-use std::any::Any;
-use std::rc::Rc;
+use core::any::Any;
+use alloc::fmt::Write;
+use alloc::rc::Rc;
+use alloc::string::String;
+use alloc::vec::Vec;
 
 use wasm_bindgen::prelude::*;
 
@@ -16,11 +25,11 @@ impl NativeFunction for NFPrint {
         let mut buf = String::new();
         for arg in args {
             match arg {
-                Value::Int(x)  => buf.push_str(&format!("{}", x)),
-                Value::Real(x) => buf.push_str(&format!("{}", x)),
-                Value::Str(x)  => buf.push_str(x),
-                _ => buf.push_str(&format!("{:?}", arg)),
-            }
+                Value::Int(x)  => write!(buf, "{}", x).unwrap_or_default(),
+                Value::Real(x) => write!(buf, "{}", x).unwrap_or_default(),
+                Value::Str(x)  => write!(buf, "{}", x).unwrap_or_default(),
+                _ => write!(buf, "{:?}", arg).unwrap_or_default(),
+            };
         }
         js_print(buf.as_str(), false);
         Value::None
@@ -37,11 +46,11 @@ impl NativeFunction for NFPrintLn {
         let mut buf = String::new();
         for arg in args {
             match arg {
-                Value::Int(x)  => buf.push_str(&format!("{}", x)),
-                Value::Real(x) => buf.push_str(&format!("{}", x)),
-                Value::Str(x)  => buf.push_str(x),
-                _ => buf.push_str(&format!("{:?}", arg)),
-            }
+                Value::Int(x)  => write!(buf, "{}", x).unwrap_or_default(),
+                Value::Real(x) => write!(buf, "{}", x).unwrap_or_default(),
+                Value::Str(x)  => write!(buf, "{}", x).unwrap_or_default(),
+                _ => write!(buf, "{:?}", arg).unwrap_or_default(),
+            };
         }
         js_print(buf.as_str(), true);
         Value::None
