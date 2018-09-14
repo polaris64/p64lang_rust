@@ -8,9 +8,6 @@ use std::rc::Rc;
 #[cfg(feature = "no_std")]
 use alloc::rc::Rc;
 
-#[cfg(feature = "no_std")]
-use alloc::vec::Vec;
-
 use ast::{NativeFunction, Value};
 use interpreter::{Scope, ScopeChain};
 
@@ -25,7 +22,7 @@ impl NativeFunction for NFPrint {
     ///
     /// Prints all arguments in turn to stdout.
     #[cfg(not(feature = "no_std"))]
-    fn execute<'src>(&self, _scopes: &mut ScopeChain<'src>, args: &Vec<Value<'src>>) -> Value<'src> {
+    fn execute<'src>(&self, _scopes: &mut ScopeChain<'src>, args: &[Value<'src>]) -> Value<'src> {
         for arg in args {
             match arg {
                 Value::Int(x)  => print!("{}", x),
@@ -38,7 +35,7 @@ impl NativeFunction for NFPrint {
     }
 
     #[cfg(feature = "no_std")]
-    fn execute<'src>(&self, _scopes: &mut ScopeChain<'src>, _args: &Vec<Value<'src>>) -> Value<'src> {
+    fn execute<'src>(&self, _scopes: &mut ScopeChain<'src>, _args: &[Value<'src>]) -> Value<'src> {
         Value::None
     }
 
@@ -52,7 +49,7 @@ impl NativeFunction for NFPrintLn {
     ///
     /// Prints all arguments in turn to stdout, followed by a newline.
     #[cfg(not(feature = "no_std"))]
-    fn execute<'src>(&self, _scopes: &mut ScopeChain<'src>, args: &Vec<Value<'src>>) -> Value<'src> {
+    fn execute<'src>(&self, _scopes: &mut ScopeChain<'src>, args: &[Value<'src>]) -> Value<'src> {
         for arg in args {
             match arg {
                 Value::Int(x)  => print!("{}", x),
@@ -61,12 +58,12 @@ impl NativeFunction for NFPrintLn {
                 _ => println!("{:?}", arg),
             };
         }
-        println!("");
+        println!();
         Value::None
     }
 
     #[cfg(feature = "no_std")]
-    fn execute<'src>(&self, _scopes: &mut ScopeChain<'src>, _args: &Vec<Value<'src>>) -> Value<'src> {
+    fn execute<'src>(&self, _scopes: &mut ScopeChain<'src>, _args: &[Value<'src>]) -> Value<'src> {
         Value::None
     }
 

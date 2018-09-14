@@ -141,6 +141,6 @@ pub trait Executable<'src> {
 /// The `execute()` method will be called via the script interpreter with the current ScopeChain
 /// and a list of argument values.
 pub trait NativeFunction {
-    fn execute<'src>(&self, scopes: &mut ScopeChain<'src>, args: &Vec<Value<'src>>) -> Value<'src>;
+    fn execute<'src>(&self, scopes: &mut ScopeChain<'src>, args: &[Value<'src>]) -> Value<'src>;
     fn as_any(&self) -> &Any;
 }

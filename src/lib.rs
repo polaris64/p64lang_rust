@@ -78,7 +78,7 @@ mod tests {
         }
     }
     impl NativeFunction for TestPrint {
-        fn execute<'src>(&self, _scopes: &mut ScopeChain<'src>, _args: &Vec<Value<'src>>) -> Value<'src> {
+        fn execute<'src>(&self, _scopes: &mut ScopeChain<'src>, _args: &[Value<'src>]) -> Value<'src> {
             self.calls.replace(self.get_calls() + 1);
             Value::None
         }
@@ -98,7 +98,7 @@ mod tests {
         }
     }
     impl NativeFunction for TestPrintLn {
-        fn execute<'src>(&self, _scopes: &mut ScopeChain<'src>, _args: &Vec<Value<'src>>) -> Value<'src> {
+        fn execute<'src>(&self, _scopes: &mut ScopeChain<'src>, _args: &[Value<'src>]) -> Value<'src> {
             self.calls.replace(self.get_calls() + 1);
             Value::None
         }
@@ -516,7 +516,7 @@ mod tests {
     fn native_functions() {
         struct TestFunc {};
         impl NativeFunction for TestFunc {
-            fn execute<'src>(&self, _scopes: &mut ScopeChain<'src>, args: &Vec<Value<'src>>) -> Value<'src> {
+            fn execute<'src>(&self, _scopes: &mut ScopeChain<'src>, args: &[Value<'src>]) -> Value<'src> {
                 match args[0] {
                     Value::Int(x) => Value::Int(x + 40),
                     _ => Value::None,

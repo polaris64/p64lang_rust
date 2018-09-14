@@ -10,6 +10,37 @@ use alloc::rc::Rc;
 #[cfg(feature = "no_std")]
 use alloc::vec::Vec;
 
+#[cfg(feature = "no_std")]
+use core::f64::EPSILON;
+
+
+/*
+ * When not using the standard library, the f64::abs() method is not available.  Define a trait and
+ * implement it for f64 here so that an implementation is available.
+ *
+ * TODO: find better solution for f64::abs() in no_std situations
+ */
+#[cfg(feature = "no_std")]
+trait CoreAbs {
+    fn abs(self) -> f64;
+}
+
+#[cfg(feature = "no_std")]
+impl CoreAbs for f64 {
+    fn abs(self) -> f64 {
+        if self < 0f64 {
+            -self
+        } else {
+            self
+        }
+    }
+}
+
+
+#[cfg(not(feature = "no_std"))]
+use std::f64::EPSILON;
+
+
 use ast::{
     Evaluatable, ExecResult, Executable, Expr, Function, Ident, NativeFunction, Opcode, Stmt,
     StmtBlock, Value,
@@ -19,6 +50,7 @@ use ast::{
 ///
 /// Contains HashMaps mapping Idents to Functions, NativeFunctions and Values (variables) in the
 /// scope
+#[derive(Default)]
 pub struct Scope<'src> {
 
     #[cfg(not(feature = "no_std"))]
@@ -58,7 +90,7 @@ impl<'src> Scope<'src> {
 
     /// When creating a Scope for a Function invocation, inserts variables for each of the
     /// Function's arguments with the values passed to the invocation.
-    pub fn from_args(args: &Vec<(&Ident<'src>, &Value<'src>)>) -> Scope<'src> {
+    pub fn from_args(args: &[(&Ident<'src>, &Value<'src>)]) -> Scope<'src> {
         let mut scope = Scope::new();
         for arg in args {
             scope.vars.insert(arg.0, arg.1.clone());
@@ -73,6 +105,7 @@ impl<'src> Scope<'src> {
 ///   - Contains methods to resolve variables, Functions, etc and to modify Scope items.
 ///   - Each function call pushes a new Scope onto the current ScopeChain.
 ///   - All evaluations/executions require a ScopeChain.
+#[derive(Default)]
 pub struct ScopeChain<'src> {
     scopes: Vec<Scope<'src>>,
 }
@@ -146,9 +179,8 @@ impl<'src> ScopeChain<'src> {
     /// reference
     pub fn resolve_func(&self, key: &'src str) -> Option<Rc<Function<'src>>> {
         for scope in self.scopes.iter().rev() {
-            match scope.funcs.get(key) {
-                Some(x) => return Some(Rc::clone(x)),
-                _ => {}
+            if let Some(x) = scope.funcs.get(key) {
+                return Some(Rc::clone(x));
             }
         }
         None
@@ -158,10 +190,9 @@ impl<'src> ScopeChain<'src> {
     /// reference
     pub fn resolve_native_func(&self, key: &'src str) -> Option<Rc<NativeFunction>> {
         for scope in self.scopes.iter().rev() {
-            match scope.native_funcs.get(key) {
-                Some(x) => return Some(Rc::clone(x)),
-                _ => {}
-            };
+            if let Some(x) = scope.native_funcs.get(key) {
+                return Some(Rc::clone(x));
+            }
         }
         None
     }
@@ -170,9 +201,8 @@ impl<'src> ScopeChain<'src> {
     /// reference to its Value
     pub fn resolve_var(&self, key: &'src str) -> Option<&Value<'src>> {
         for scope in self.scopes.iter().rev() {
-            match scope.vars.get(key) {
-                Some(ref x) => return Some(x),
-                _ => {}
+            if let Some(ref x) = scope.vars.get(key) {
+                return Some(x);
             }
         }
         None
@@ -239,12 +269,12 @@ impl Opcode {
     }
 
     /// Evaluates the unary Opcode given Value of the operand
-    fn eval_unary<'src>(&self, x: Value<'src>) -> Value<'src> {
+    fn eval_unary<'src>(&self, x: &Value<'src>) -> Value<'src> {
         match *self {
             Opcode::Not => match x {
                 Value::Bool(x) => Value::Bool(!x),
                 Value::None    => Value::Bool(true),
-                _ => Value::Bool(false),
+                _              => Value::Bool(false),
             },
             _ => Value::None,
         }
@@ -252,20 +282,21 @@ impl Opcode {
 
     /// Calculates an Opcode's logical result given left and right operands
     fn logical<'src>(&self, l: Value<'src>, r: Value<'src>) -> Value<'src> {
+
         match *self {
             Opcode::Equal => match (l, r) {
                 (Value::Int(l),  Value::Int(r))  => Value::Bool(l == r),
-                (Value::Int(l),  Value::Real(r)) => Value::Bool(l as f64 == r),
-                (Value::Real(l), Value::Int(r))  => Value::Bool(l == r as f64),
-                (Value::Real(l), Value::Real(r)) => Value::Bool(l == r),
+                (Value::Int(l),  Value::Real(r)) => Value::Bool(((l as f64) - r).abs() <= EPSILON),
+                (Value::Real(l), Value::Int(r))  => Value::Bool((l - (r as f64)).abs() <= EPSILON),
+                (Value::Real(l), Value::Real(r)) => Value::Bool((l - r).abs() <= EPSILON),
                 (Value::Str(l),  Value::Str(r))  => Value::Bool(l == r),
                 (_, _) => Value::None,
             },
             Opcode::NotEqual => match (l, r) {
                 (Value::Int(l),  Value::Int(r))  => Value::Bool(l != r),
-                (Value::Int(l),  Value::Real(r)) => Value::Bool(l as f64 != r),
-                (Value::Real(l), Value::Int(r))  => Value::Bool(l != r as f64),
-                (Value::Real(l), Value::Real(r)) => Value::Bool(l != r),
+                (Value::Int(l),  Value::Real(r)) => Value::Bool(((l as f64) - r).abs() > EPSILON),
+                (Value::Real(l), Value::Int(r))  => Value::Bool((l - (r as f64)).abs() > EPSILON),
+                (Value::Real(l), Value::Real(r)) => Value::Bool((l - r).abs() > EPSILON),
                 (Value::Str(l),  Value::Str(r))  => Value::Bool(l != r),
                 (_, _) => Value::None,
             },
@@ -325,7 +356,7 @@ impl<'src> Function<'src> {
     ///   - Executes the Function's statements (StmtBlock)
     ///   - Removes the Function's Scope
     ///   - Returns the Function result Value
-    pub fn execute(&self, scopes: &mut ScopeChain<'src>, args: &Vec<Value<'src>>) -> Value<'src> {
+    pub fn execute(&self, scopes: &mut ScopeChain<'src>, args: &[Value<'src>]) -> Value<'src> {
         // Create local scope
         let scope = Scope::from_args(
             &self
@@ -428,7 +459,7 @@ impl<'src> Evaluatable<'src> for Expr<'src> {
             Expr::None    => Value::None,
             Expr::Real(x) => Value::Real(x),
             Expr::Str(x)  => Value::Str(x),
-            Expr::UnaryOp(ref opc, ref x) => opc.eval_unary(x.eval(scopes)),
+            Expr::UnaryOp(ref opc, ref x) => opc.eval_unary(&x.eval(scopes)),
         }
     }
 }

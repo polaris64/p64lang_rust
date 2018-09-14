@@ -210,7 +210,7 @@ named!(dict_literal<CompleteStr, Expr>,
             separated_list!(ws!(tag!(",")), map!(key_val_pair, |(k, v)| (k, Box::new(v)))),
             ws!(tag!("}"))
         ),
-        |x| Expr::Dict(x)
+        Expr::Dict
     )
 );
 
@@ -223,7 +223,7 @@ named!(func_call<CompleteStr, Expr>,
         id: ident >>
         args: delimited!(
             ws!(tag!("(")),
-            separated_list!(ws!(tag!(",")), map!(expr, |x| Box::new(x))),
+            separated_list!(ws!(tag!(",")), map!(expr, Box::new)),
             ws!(tag!(")"))
         ) >>
         ( Expr::FuncCall(id, args) )
@@ -241,7 +241,7 @@ named!(key_val_pair<CompleteStr, (Ident, Expr)>,
         key: str_literal >>
         ws!(tag!(":")) >>
         val: expr >>
-        ( (key, val) )
+        (key, val)
     )
 );
 
@@ -251,7 +251,7 @@ named!(list_element<CompleteStr, Expr>,
         id: ident >>
         idx: delimited!(
             ws!(tag!("[")),
-            map!(expr, |x| Box::new(x)),
+            map!(expr, Box::new),
             ws!(tag!("]"))
         ) >>
         ( Expr::ListElement(id, idx) )
@@ -263,10 +263,10 @@ named!(list_literal<CompleteStr, Expr>,
     map!(
         delimited!(
             ws!(tag!("[")),
-            separated_list!(ws!(tag!(",")), map!(expr, |x| Box::new(x))),
+            separated_list!(ws!(tag!(",")), map!(expr, Box::new)),
             ws!(tag!("]"))
         ),
-        |x| Expr::List(x)
+        Expr::List
     )
 );
 
@@ -300,17 +300,17 @@ named!(unary_op<CompleteStr, Expr>,
 /// Parser for any language expression that results in a single value
 named!(value_expr<CompleteStr, Expr>,
     alt!(
-        map!(float_literal, |x: f64|   Expr::Real(x)) |
-        map!(int_literal,   |x: isize| Expr::Int(x))  |
-        map!(bool_literal,  |x: bool|  Expr::Bool(x)) |
-        map!(str_literal,   |x: &str|  Expr::Str(x))  |
-        map!(tag!("null"),  |_|        Expr::None)    |
-        func_call                                     |
-        dict_literal                                  |
-        list_literal                                  |
-        list_element                                  |
-        unary_op                                      |
-        map!(ident,         |x|        Expr::Id(x))
+        map!(float_literal,     Expr::Real) |
+        map!(int_literal,       Expr::Int)  |
+        map!(bool_literal,      Expr::Bool) |
+        map!(str_literal,       Expr::Str)  |
+        map!(tag!("null"),  |_| Expr::None) |
+        func_call                           |
+        dict_literal                        |
+        list_literal                        |
+        list_element                        |
+        unary_op                            |
+        map!(ident,             Expr::Id)
     )
 );
 
@@ -322,7 +322,7 @@ named!(break_statement<CompleteStr, Stmt>,
 );
 
 named!(expr_statement<CompleteStr, Stmt>,
-    map!(expr, |x| Stmt::Expr(x))
+    map!(expr, Stmt::Expr)
 );
 
 named!(fndef_statement<CompleteStr, Stmt>,
