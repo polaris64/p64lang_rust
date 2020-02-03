@@ -142,5 +142,5 @@ pub trait Executable<'src> {
 /// and a list of argument values.
 pub trait NativeFunction {
     fn execute<'src>(&self, scopes: &mut ScopeChain<'src>, args: &[Value<'src>]) -> Value<'src>;
-    fn as_any(&self) -> &Any;
+    fn as_any(&self) -> &dyn Any;
 }

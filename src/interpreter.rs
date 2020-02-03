@@ -14,13 +14,12 @@ use alloc::vec::Vec;
 use core::f64::EPSILON;
 
 
-/*
- * When not using the standard library, the f64::abs() method is not available.  Define a trait and
- * implement it for f64 here so that an implementation is available.
- *
- * TODO: find better solution for f64::abs() in no_std situations
- */
 #[cfg(feature = "no_std")]
+/*
+ * When not using the standard library, the f64::abs() method is not available.
+ * Define a trait and implement it for f64 here so that an implementation is
+ * available.
+ */
 trait CoreAbs {
     fn abs(self) -> f64;
 }
@@ -28,6 +27,7 @@ trait CoreAbs {
 #[cfg(feature = "no_std")]
 impl CoreAbs for f64 {
     fn abs(self) -> f64 {
+        // TODO: find better solution for f64::abs() in no_std situations
         if self < 0f64 {
             -self
         } else {
@@ -59,7 +59,7 @@ pub struct Scope<'src> {
     pub funcs: BTreeMap<Ident<'src>, Rc<Function<'src>>>,
 
     #[cfg(not(feature = "no_std"))]
-    pub native_funcs: HashMap<Ident<'src>, Rc<NativeFunction>>,
+    pub native_funcs: HashMap<Ident<'src>, Rc<dyn NativeFunction>>,
     #[cfg(feature = "no_std")]
     pub native_funcs: BTreeMap<Ident<'src>, Rc<NativeFunction>>,
 
@@ -188,7 +188,7 @@ impl<'src> ScopeChain<'src> {
 
     /// Searches from last to first Scope for a NativeFunction identified by `key` and returns a
     /// reference
-    pub fn resolve_native_func(&self, key: &'src str) -> Option<Rc<NativeFunction>> {
+    pub fn resolve_native_func(&self, key: &'src str) -> Option<Rc<dyn NativeFunction>> {
         for scope in self.scopes.iter().rev() {
             if let Some(x) = scope.native_funcs.get(key) {
                 return Some(Rc::clone(x));
@@ -399,7 +399,7 @@ impl<'src> Evaluatable<'src> for Expr<'src> {
                 Value::Dict(map)
             },
             Expr::FuncCall(ref func_id, ref args) => {
-                let mut eval_args = args.iter().map(|x| x.eval(scopes)).collect::<Vec<Value<'src>>>();
+                let eval_args = args.iter().map(|x| x.eval(scopes)).collect::<Vec<Value<'src>>>();
                 match scopes.resolve_func(func_id) {
                     Some(f) => f.execute(scopes, &eval_args),
                     None => match scopes.resolve_native_func(func_id) {

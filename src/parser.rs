@@ -13,7 +13,7 @@ use nom::types::CompleteStr;
 
 use ast::{Expr, Ident, Opcode, Stmt, StmtBlock};
 
-/**
+/*
  * Takes an optional sign (&str, "+" or "-") and a number and returns the correct signed number
  * according to the sign.
  *
@@ -31,10 +31,10 @@ fn signed_number<T: Neg<Output = T>>(sign: Option<CompleteStr>, num: T) -> T {
     }
 }
 
-/// Parser for a number's sign: either "+" or "-"
+// Parser for a number's sign: either "+" or "-"
 named!(number_sign<CompleteStr, CompleteStr>, alt!(tag!("+") | tag!("-")));
 
-/**
+/*
  * Parser for a single real number: optional number_sign followed by a real number (optional
  * integer component, period, decimal digits).
  */
@@ -59,7 +59,7 @@ named!(real<CompleteStr, f64>,
     )
 );
 
-/// Parser for a single integer number: optional number_sign followed by an integer number
+// Parser for a single integer number: optional number_sign followed by an integer number
 named!(int<CompleteStr, isize>,
     do_parse!(
         sign: opt!(number_sign) >>
@@ -74,12 +74,12 @@ named!(int<CompleteStr, isize>,
 /// Returns true if the char is valid for an identifier (not in first position)
 fn is_ident_char(c: char) -> bool {
     match c {
-        'a'...'z' | 'A'...'Z' | '0'...'9' | '_' => true,
+        'a'..='z' | 'A'..='Z' | '0'..='9' | '_' => true,
         _ => false
     }
 }
 
-/// Parser for a single language identifier (e.g. "name1")
+// Parser for a single language identifier (e.g. "name1")
 named!(ident<CompleteStr, Ident>,
     map!(
         recognize!(pair!(alt!(alpha | tag!("_")), take_while!(is_ident_char))),
@@ -90,7 +90,7 @@ named!(ident<CompleteStr, Ident>,
 
 // --- Expressions ---
 
-/// Parser for logical (&&, ||, ^) Opcodes
+// Parser for logical (&&, ||, ^) Opcodes
 named!(logical_opcode<CompleteStr, Opcode>,
     alt!(
         map!(tag!("&&"), |_| Opcode::LogicalAnd) |
@@ -99,7 +99,7 @@ named!(logical_opcode<CompleteStr, Opcode>,
     )
 );
 
-/// Parser for relational Opcodes (e.g. <, >=, !=)
+// Parser for relational Opcodes (e.g. <, >=, !=)
 named!(relational_opcode<CompleteStr, Opcode>,
     alt!(
         map!(tag!("<="), |_| Opcode::LessThanOrEqual)    |
@@ -111,7 +111,7 @@ named!(relational_opcode<CompleteStr, Opcode>,
     )
 );
 
-/// Parser for "*", "/", "%" Opcodes
+// Parser for "*", "/", "%" Opcodes
 named!(product_opcode<CompleteStr, Opcode>,
     alt!(
         map!(tag!("*"), |_| Opcode::Mul) |
@@ -120,7 +120,7 @@ named!(product_opcode<CompleteStr, Opcode>,
     )
 );
 
-/// Parser for "+", "-" Opcodes
+// Parser for "+", "-" Opcodes
 named!(sum_opcode<CompleteStr, Opcode>,
     alt!(
         map!(tag!("+"), |_| Opcode::Add) |
@@ -128,8 +128,8 @@ named!(sum_opcode<CompleteStr, Opcode>,
     )
 );
 
-/// Parser for an expression term: parses either an "expr" delimited by parentheses (recursion) or
-/// another language value type
+// Parser for an expression term: parses either an "expr" delimited by
+// parentheses (recursion) or another language value type
 named!(term<CompleteStr, Expr>,
     alt!(
         ws!(delimited!(tag!("("), expr, tag!(")"))) |
@@ -137,7 +137,7 @@ named!(term<CompleteStr, Expr>,
     )
 );
 
-/// Parser for logical expressions (e.g. true && false)
+// Parser for logical expressions (e.g. true && false)
 named!(logical_expr<CompleteStr, Expr>,
     alt!(
         do_parse!(
@@ -150,7 +150,7 @@ named!(logical_expr<CompleteStr, Expr>,
     )
 );
 
-/// Parser for relational expressions (e.g. 1 < 2)
+// Parser for relational expressions (e.g. 1 < 2)
 named!(relational_expr<CompleteStr, Expr>,
     alt!(
         do_parse!(
@@ -163,7 +163,7 @@ named!(relational_expr<CompleteStr, Expr>,
     )
 );
 
-/// Parser for product expressions (e.g. 2 * 3)
+// Parser for product expressions (e.g. 2 * 3)
 named!(product_expr<CompleteStr, Expr>,
     alt!(
         do_parse!(
@@ -176,7 +176,7 @@ named!(product_expr<CompleteStr, Expr>,
     )
 );
 
-/// Parser for sum expressions (e.g. 1 + 2)
+// Parser for sum expressions (e.g. 1 + 2)
 named!(sum_expr<CompleteStr, Expr>,
     alt!(
         do_parse!(
@@ -189,12 +189,12 @@ named!(sum_expr<CompleteStr, Expr>,
     )
 );
 
-/// Parser for any language expression
+// Parser for any language expression
 named!(expr<CompleteStr, Expr>,
     call!(sum_expr)
 );
 
-/// Parser for Boolean literals
+// Parser for Boolean literals
 named!(bool_literal<CompleteStr, bool>,
     alt!(
         tag_no_case!("true") => { |_| true } |
@@ -202,7 +202,7 @@ named!(bool_literal<CompleteStr, bool>,
     )
 );
 
-/// Parser for Dict literals
+// Parser for Dict literals
 named!(dict_literal<CompleteStr, Expr>,
     map!(
         delimited!(
@@ -214,10 +214,10 @@ named!(dict_literal<CompleteStr, Expr>,
     )
 );
 
-/// Parser for float literals (calls real)
+// Parser for float literals (calls real)
 named!(float_literal<CompleteStr, f64>, call!(real));
 
-/// Parser for function call expressions
+// Parser for function call expressions
 named!(func_call<CompleteStr, Expr>,
     do_parse!(
         id: ident >>
@@ -230,12 +230,12 @@ named!(func_call<CompleteStr, Expr>,
     )
 );
 
-/// Parser for int literals
+// Parser for int literals
 named!(int_literal<CompleteStr, isize>,
    call!(int)
 );
 
-/// Parser for a key (string) / value (expr) pair
+// Parser for a key (string) / value (expr) pair
 named!(key_val_pair<CompleteStr, (Ident, Expr)>,
     do_parse!(
         key: str_literal >>
@@ -245,7 +245,7 @@ named!(key_val_pair<CompleteStr, (Ident, Expr)>,
     )
 );
 
-/// Parser for list elements: list identifier and index
+// Parser for list elements: list identifier and index
 named!(list_element<CompleteStr, Expr>,
     do_parse!(
         id: ident >>
@@ -258,7 +258,7 @@ named!(list_element<CompleteStr, Expr>,
     )
 );
 
-/// Parser for a List literal
+// Parser for a List literal
 named!(list_literal<CompleteStr, Expr>,
     map!(
         delimited!(
@@ -270,7 +270,7 @@ named!(list_literal<CompleteStr, Expr>,
     )
 );
 
-/// Parser for string literals (characters enclosed by '"' characters)
+// Parser for string literals (characters enclosed by '"' characters)
 named!(str_literal<CompleteStr, &str>,
     alt!(
         map!(
@@ -281,14 +281,14 @@ named!(str_literal<CompleteStr, &str>,
     )
 );
 
-/// Parser for a unary Opcode (e.g. "!")
+// Parser for a unary Opcode (e.g. "!")
 named!(unary_opcode<CompleteStr, Opcode>,
     alt!(
         tag!("!") => { |_| Opcode::Not }
     )
 );
 
-/// Parser for any unary operation (e.g. "!true")
+// Parser for any unary operation (e.g. "!true")
 named!(unary_op<CompleteStr, Expr>,
     do_parse!(
         op: unary_opcode >>
@@ -297,7 +297,7 @@ named!(unary_op<CompleteStr, Expr>,
     )
 );
 
-/// Parser for any language expression that results in a single value
+// Parser for any language expression that results in a single value
 named!(value_expr<CompleteStr, Expr>,
     alt!(
         map!(float_literal,     Expr::Real) |
@@ -395,7 +395,7 @@ named!(return_statement<CompleteStr, Stmt>,
     )
 );
 
-/// Parser for a single supported statement of any type
+// Parser for a single supported statement of any type
 named!(statement<CompleteStr, Stmt>,
     alt!(
         break_statement           |
@@ -410,7 +410,7 @@ named!(statement<CompleteStr, Stmt>,
     )
 );
 
-/// Parser for a list of "statement" separated by ";" with an optional trailing ";"
+// Parser for a list of "statement" separated by ";" with an optional trailing ";"
 named!(statements<CompleteStr, Vec<Stmt>>,
     do_parse!(
         list: separated_list!(ws!(tag!(";")), statement) >>
@@ -419,13 +419,13 @@ named!(statements<CompleteStr, Vec<Stmt>>,
     )
 );
 
-/// Parser for "statements" enclosed within braces
+// Parser for "statements" enclosed within braces
 named!(statement_block<CompleteStr, StmtBlock>,
     delimited!(ws!(tag!("{")), statements, ws!(tag!("}")))
 );
 
 
-/// Axiom rule: parses an entire program
+// Axiom rule: parses an entire program
 named!(program_parser<CompleteStr, StmtBlock>,
     call!(statements)
 );

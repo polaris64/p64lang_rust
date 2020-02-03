@@ -39,7 +39,7 @@ impl NativeFunction for NFPrint {
         Value::None
     }
 
-    fn as_any(&self) -> &Any {
+    fn as_any(&self) -> &dyn Any {
         self
     }
 }
@@ -67,7 +67,7 @@ impl NativeFunction for NFPrintLn {
         Value::None
     }
 
-    fn as_any(&self) -> &Any {
+    fn as_any(&self) -> &dyn Any {
         self
     }
 }
