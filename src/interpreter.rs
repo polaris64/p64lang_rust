@@ -61,7 +61,7 @@ pub struct Scope<'src> {
     #[cfg(not(feature = "no_std"))]
     pub native_funcs: HashMap<Ident<'src>, Rc<dyn NativeFunction>>,
     #[cfg(feature = "no_std")]
-    pub native_funcs: BTreeMap<Ident<'src>, Rc<NativeFunction>>,
+    pub native_funcs: BTreeMap<Ident<'src>, Rc<dyn NativeFunction>>,
 
     // TODO: vars: HashMap<Ident, &Value> to avoid clone?
     #[cfg(not(feature = "no_std"))]

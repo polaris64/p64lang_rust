@@ -9,4 +9,4 @@ no_std = ["nom/alloc"]
 std = ["nom/std"]
 
 [dependencies]
-nom = { version = "4.0.0", default-features = false }
+nom = { version = "^4.1", default-features = false }

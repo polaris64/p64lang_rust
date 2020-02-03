@@ -1,6 +1,5 @@
 #![no_std]
 
-#![feature(alloc)]
 #[macro_use]
 extern crate alloc;
 
@@ -34,7 +33,7 @@ impl NativeFunction for NFPrint {
         Value::None
     }
 
-    fn as_any(&self) -> &Any {
+    fn as_any(&self) -> &dyn Any {
         self
     }
 }
@@ -55,12 +54,12 @@ impl NativeFunction for NFPrintLn {
         Value::None
     }
 
-    fn as_any(&self) -> &Any {
+    fn as_any(&self) -> &dyn Any {
         self
     }
 }
 
-#[wasm_bindgen(module = "./index.js")]
+#[wasm_bindgen(raw_module = "./index.js")]
 extern {
     fn js_print(s: &str, nl: bool);
 }

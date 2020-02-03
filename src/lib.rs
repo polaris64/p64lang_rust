@@ -1,4 +1,3 @@
-#![cfg_attr(feature = "no_std", feature(alloc))]
 #![cfg_attr(feature = "no_std", no_std)]
 
 #[cfg(feature = "no_std")]
@@ -82,7 +81,7 @@ mod tests {
             self.calls.replace(self.get_calls() + 1);
             Value::None
         }
-        fn as_any(&self) -> &Any {
+        fn as_any(&self) -> &dyn Any {
             self
         }
     }
@@ -102,7 +101,7 @@ mod tests {
             self.calls.replace(self.get_calls() + 1);
             Value::None
         }
-        fn as_any(&self) -> &Any {
+        fn as_any(&self) -> &dyn Any {
             self
         }
     }
@@ -522,7 +521,7 @@ mod tests {
                     _ => Value::None,
                 }
             }
-            fn as_any(&self) -> &Any {
+            fn as_any(&self) -> &dyn Any {
                 self
             }
         };
